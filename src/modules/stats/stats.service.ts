@@ -22,6 +22,7 @@ export class StatsService {
 
   async getOverview() {
     const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const since14d = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
 
     const [
       totalResults,
@@ -33,6 +34,8 @@ export class StatsService {
       byStatusRaw,
       topKeywords,
       recentSearches,
+      searchTrendRaw,
+      resultTrendRaw,
       queue,
     ] = await Promise.all([
       this.resultRepo.count(),
@@ -66,8 +69,32 @@ export class StatsService {
         order: { createdAt: 'DESC' },
         take: 12,
       }),
+      this.historyRepo
+        .createQueryBuilder('h')
+        .select(`TO_CHAR(h."createdAt", 'YYYY-MM-DD')`, 'day')
+        .addSelect('COUNT(*)', 'count')
+        .where('h."createdAt" >= :since', { since: since14d })
+        .groupBy(`TO_CHAR(h."createdAt", 'YYYY-MM-DD')`)
+        .orderBy('day', 'ASC')
+        .getRawMany<{ day: string; count: string }>(),
+      this.resultRepo
+        .createQueryBuilder('r')
+        .select(`TO_CHAR(r."createdAt", 'YYYY-MM-DD')`, 'day')
+        .addSelect('COUNT(*)', 'count')
+        .where('r."createdAt" >= :since', { since: since14d })
+        .groupBy(`TO_CHAR(r."createdAt", 'YYYY-MM-DD')`)
+        .orderBy('day', 'ASC')
+        .getRawMany<{ day: string; count: string }>(),
       this.crawlQueue.getJobCounts().catch(() => null),
     ]);
+
+    const searchByDay = new Map(
+      searchTrendRaw.map((r) => [r.day, Number(r.count)]),
+    );
+    const resultByDay = new Map(
+      resultTrendRaw.map((r) => [r.day, Number(r.count)]),
+    );
+    const searchTrend = fillDailyTrend(since14d, searchByDay, resultByDay);
 
     return {
       totals: {
@@ -102,8 +129,35 @@ export class StatsService {
         finishedAt: h.finishedAt,
         errorMessage: h.errorMessage,
       })),
+      searchTrend,
       queue,
       generatedAt: new Date().toISOString(),
     };
   }
+}
+
+function fillDailyTrend(
+  since: Date,
+  searches: Map<string, number>,
+  results: Map<string, number>,
+) {
+  const days: { day: string; searches: number; results: number }[] = [];
+  const cursor = new Date(since);
+  cursor.setHours(0, 0, 0, 0);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  while (cursor <= today) {
+    const y = cursor.getFullYear();
+    const m = String(cursor.getMonth() + 1).padStart(2, '0');
+    const d = String(cursor.getDate()).padStart(2, '0');
+    const key = `${y}-${m}-${d}`;
+    days.push({
+      day: key,
+      searches: searches.get(key) ?? 0,
+      results: results.get(key) ?? 0,
+    });
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return days;
 }

@@ -68,12 +68,14 @@ export class SearchService {
           }),
         );
 
+        const results = cached.map((doc) => this.fromElasticDoc(doc, history.id));
+
         return {
           searchId: history.id,
           status: history.status,
           source: 'cache',
           resultCount: cached.length,
-          results: cached,
+          results,
         };
       }
 
@@ -186,22 +188,7 @@ export class SearchService {
         sites: history.sites ?? undefined,
         size: Math.max(history.resultCount || 50, 50),
       });
-      results = cached.map((doc) => ({
-        id: doc.id,
-        searchHistoryId: history.id,
-        siteCode: doc.site,
-        title: doc.title,
-        price: doc.price != null ? String(doc.price) : null,
-        seller: doc.seller,
-        region: doc.region ?? null,
-        url: doc.url,
-        imageUrl: doc.image,
-        screenshotUrl: null,
-        titleSimilarity: doc.titleSimilarity ?? null,
-        imageSimilarity: doc.imageSimilarity ?? null,
-        createdAt: doc.createdAt,
-        source: 'elastic-cache',
-      }));
+      results = cached.map((doc) => this.fromElasticDoc(doc, history.id));
     }
 
     return {
@@ -250,6 +237,41 @@ export class SearchService {
       limit,
       total,
       items: items.map((r) => this.toResultDto(r)),
+    };
+  }
+
+  /** Elastic 문서 → 프론트 공통 Result DTO */
+  private fromElasticDoc(
+    doc: {
+      id: string;
+      title: string;
+      price: number | null;
+      seller: string | null;
+      site: string;
+      image: string | null;
+      url: string;
+      createdAt: string;
+      titleSimilarity?: number | null;
+      imageSimilarity?: number | null;
+      region?: string | null;
+    },
+    searchHistoryId: string,
+  ) {
+    return {
+      id: doc.id,
+      searchHistoryId,
+      siteCode: doc.site,
+      title: doc.title,
+      price: doc.price != null ? String(doc.price) : null,
+      seller: doc.seller,
+      region: doc.region ?? null,
+      url: doc.url,
+      imageUrl: doc.image,
+      screenshotUrl: null,
+      titleSimilarity: doc.titleSimilarity ?? null,
+      imageSimilarity: doc.imageSimilarity ?? null,
+      createdAt: doc.createdAt,
+      source: 'elastic-cache',
     };
   }
 

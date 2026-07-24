@@ -218,12 +218,17 @@ export class CrawlerService {
     });
 
     if (existing) {
-      // URL 중복 저장 방지 (FR-005) — 검색 이력만 연결 갱신
-      if (!existing.searchHistoryId) {
-        existing.searchHistoryId = history.id;
-        await this.resultRepo.save(existing);
+      // URL 중복 저장 방지 — 현재 검색 이력에 재연결해 결과/이미지 노출
+      existing.searchHistoryId = history.id;
+      if (!existing.imageUrl && listing.imageUrl) {
+        existing.imageUrl = listing.imageUrl;
       }
-      return false;
+      existing.titleSimilarity = titleSimilarity(
+        payload.keyword,
+        listing.title,
+      );
+      await this.resultRepo.save(existing);
+      return true;
     }
 
     const site = await this.siteRepo.findOne({ where: { code: siteCode } });

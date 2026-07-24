@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import type { SearchDetail, SearchResult } from '../types';
+import { resolveAssetUrl } from '../api';
 import {
   formatPrice,
   formatRelative,
@@ -320,18 +321,49 @@ export function ResultsPanel({
 
                 {/* 3) 이미지 */}
                 <div className="mt-2.5 overflow-hidden rounded-xl bg-sand-100 ring-1 ring-ink-100/70">
-                  {row.imageUrl ? (
-                    <img
-                      src={row.imageUrl}
-                      alt=""
-                      className="aspect-[16/10] w-full object-cover transition duration-200 group-hover:scale-[1.02]"
-                      loading="lazy"
-                    />
-                  ) : (
-                    <div className="flex aspect-[16/10] items-center justify-center text-xs text-ink-300">
-                      No image
-                    </div>
-                  )}
+                  {(() => {
+                    const remote = row.imageUrl || null;
+                    const local =
+                      resolveAssetUrl(row.screenshotUrl) ||
+                      row.screenshotUrl ||
+                      null;
+                    const primary = remote || local;
+                    if (!primary) {
+                      return (
+                        <div className="flex aspect-[16/10] items-center justify-center text-xs text-ink-300">
+                          No image
+                        </div>
+                      );
+                    }
+                    return (
+                      <img
+                        src={primary}
+                        alt=""
+                        className="aspect-[16/10] w-full object-cover transition duration-200 group-hover:scale-[1.02]"
+                        loading="lazy"
+                        referrerPolicy="no-referrer"
+                        onError={(e) => {
+                          const el = e.currentTarget;
+                          if (local && !el.dataset.fallbackTried) {
+                            el.dataset.fallbackTried = '1';
+                            el.src = local;
+                            return;
+                          }
+                          el.style.display = 'none';
+                          const ph = el.parentElement?.querySelector(
+                            '[data-no-image]',
+                          ) as HTMLElement | null;
+                          if (ph) ph.classList.remove('hidden');
+                        }}
+                      />
+                    );
+                  })()}
+                  <div
+                    data-no-image
+                    className="hidden aspect-[16/10] items-center justify-center text-xs text-ink-300"
+                  >
+                    No image
+                  </div>
                 </div>
 
                 {/* 4) 상품명 */}

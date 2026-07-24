@@ -41,11 +41,23 @@ export function subscribeSearchProgress(
     if (event.searchId === searchId) onProgress(event);
   };
 
-  socket.emit('subscribe', { searchId });
+  const onConnect = () => {
+    socket.emit('subscribe', { searchId });
+  };
+
+  // room 이벤트 + broadcast 폴백 (구독 레이스 완화)
   socket.on('progress', handler);
+  socket.on('progress:broadcast', handler);
+  if (socket.connected) {
+    socket.emit('subscribe', { searchId });
+  } else {
+    socket.once('connect', onConnect);
+  }
 
   return () => {
+    socket.off('connect', onConnect);
     socket.emit('unsubscribe', { searchId });
     socket.off('progress', handler);
+    socket.off('progress:broadcast', handler);
   };
 }

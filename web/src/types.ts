@@ -56,6 +56,11 @@ export interface StatsOverview {
     finishedAt: string | null;
     errorMessage: string | null;
   }[];
+  searchTrend?: {
+    day: string;
+    searches: number;
+    results: number;
+  }[];
   queue: Record<string, number> | null;
   generatedAt: string;
 }

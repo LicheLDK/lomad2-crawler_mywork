@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { LayoutDashboard, Radar } from 'lucide-react';
+import {
+  Navigate,
+  Route,
+  Routes,
+  useLocation,
+  useNavigate,
+} from 'react-router-dom';
 import { api, getApiKey, setApiKey as persistApiKey } from './api';
 import type { HealthPayload, SearchDetail, SiteCode, StatsOverview } from './types';
 import { HealthBar } from './components/HealthBar';
@@ -7,33 +13,47 @@ import { SearchToolbar } from './components/SearchToolbar';
 import { SearchProgressPanel } from './components/SearchProgressPanel';
 import { RecentSearches } from './components/RecentSearches';
 import { ResultsPanel } from './components/ResultsPanel';
-import { StatsStrip } from './components/StatsStrip';
+import { DashboardSummary } from './components/DashboardSummary';
+import { AppShell } from './components/AppShell';
+import type { NavBadgeMap } from './components/AppSidebar';
+import { HistoryPage } from './pages/HistoryPage';
+import { AnalyticsPage } from './pages/AnalyticsPage';
+import { SystemPage } from './pages/SystemPage';
+import { PlaceholderPage } from './pages/PlaceholderPage';
+import { pathMatches, type NavId } from './config/navigation';
 import {
   subscribeSearchProgress,
   type CrawlProgressEvent,
 } from './lib/socket';
 
-type NavId = 'dashboard';
-
-const NAV_ITEMS: {
-  id: NavId;
-  label: string;
-  icon: typeof LayoutDashboard;
-}[] = [
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-];
-
 const TERMINAL = new Set(['completed', 'partial', 'failed', 'cached']);
 const PROGRESS_DONE = new Set(['completed', 'partial', 'failed']);
+const UNVERIFIED_KEY = 'crawler.dashboard.investigation.unverified';
+
+function readUnverifiedCount(): number {
+  try {
+    const n = Number(localStorage.getItem(UNVERIFIED_KEY) || '0');
+    return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+  } catch {
+    return 0;
+  }
+}
 
 export default function App() {
+  const navigate = useNavigate();
+  const location = useLocation();
   const [apiKey, setApiKeyState] = useState(getApiKey());
   const [health, setHealth] = useState<HealthPayload | null>(null);
   const [stats, setStats] = useState<StatsOverview | null>(null);
   const [detail, setDetail] = useState<SearchDetail | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [nav, setNav] = useState<NavId>('dashboard');
+  const [accordionOpen, setAccordionOpen] = useState<Partial<Record<NavId, boolean>>>(
+    () => ({
+      search: pathMatches('/search', location.pathname),
+    }),
+  );
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [progress, setProgress] = useState<CrawlProgressEvent | null>(null);
   const [activeSearchId, setActiveSearchId] = useState<string | null>(null);
   const pollRef = useRef<number | null>(null);
@@ -76,9 +96,29 @@ export default function App() {
     [stopPoll, stopProgressSocket],
   );
 
+  useEffect(() => {
+    if (pathMatches('/search', location.pathname)) {
+      setAccordionOpen((prev) => ({ ...prev, search: true }));
+    }
+    setMobileNavOpen(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (!mobileNavOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [mobileNavOpen]);
+
   function onApiKeyChange(value: string) {
     setApiKeyState(value);
     persistApiKey(value);
+  }
+
+  function onAccordionChange(id: NavId, open: boolean) {
+    setAccordionOpen((prev) => ({ ...prev, [id]: open }));
   }
 
   async function loadSearch(id: string, keepBusy = false) {
@@ -87,6 +127,10 @@ export default function App() {
     if (TERMINAL.has(next.status)) {
       setBusy(false);
       stopPoll();
+      // WS 이벤트를 놓쳐도 폴링으로 완료되면 진행 패널 해제
+      setProgress(null);
+      stopProgressSocket();
+      setActiveSearchId(null);
       void refreshMeta();
     } else if (!keepBusy) {
       setBusy(true);
@@ -131,11 +175,19 @@ export default function App() {
   function startPolling(id: string) {
     stopPoll();
     pollRef.current = window.setInterval(() => {
-      void loadSearch(id, true).catch((e) => {
-        setError(e instanceof Error ? e.message : String(e));
-        setBusy(false);
-        stopPoll();
-      });
+      void loadSearch(id, true)
+        .then((next) => {
+          if (TERMINAL.has(next.status)) {
+            stopPoll();
+          }
+        })
+        .catch((e) => {
+          setError(e instanceof Error ? e.message : String(e));
+          setBusy(false);
+          setProgress(null);
+          stopProgressSocket();
+          stopPoll();
+        });
     }, 2000);
   }
 
@@ -170,19 +222,17 @@ export default function App() {
       ) {
         setDetail(started as SearchDetail);
         setBusy(false);
+        setProgress(null);
         void refreshMeta();
         return;
       }
 
       attachProgress(id);
-      await loadSearch(id, true);
-      if (!TERMINAL.has(started.status)) {
+      const next = await loadSearch(id, true);
+      if (!TERMINAL.has(next.status)) {
         startPolling(id);
-      } else {
-        setBusy(false);
-        setProgress(null);
-        stopProgressSocket();
       }
+      // loadSearch가 이미 TERMINAL이면 progress/busy 정리됨
     } catch (e) {
       setBusy(false);
       setProgress(null);
@@ -210,78 +260,71 @@ export default function App() {
     }
   }
 
+  function onSelectSearchFromHistory(id: string) {
+    navigate('/');
+    void onSelectSearch(id);
+  }
+
+  const queue = health?.info?.queue ?? stats?.queue ?? null;
+  const workerCount = queue?.active ?? 0;
+  const queueCount = (queue?.waiting ?? 0) + (queue?.delayed ?? 0);
+
+  const badges: NavBadgeMap = {
+    history: stats?.recentSearches?.length ?? 0,
+    system: (() => {
+      const info = health?.info;
+      let n = queue?.failed ?? 0;
+      if (!health) return Math.max(n, 1);
+      if (info?.postgres?.status !== 'up') n += 1;
+      if (info?.redis?.status !== 'up') n += 1;
+      if (info?.elasticsearch?.status !== 'up') n += 1;
+      if (health.status === 'error') n += 1;
+      return n;
+    })(),
+    investigation: readUnverifiedCount(),
+  };
+
   return (
-    <div className="min-h-screen bg-app-grid text-ink-900">
-      <div className="mx-auto flex min-h-screen max-w-[1600px]">
-        <aside className="hidden w-56 shrink-0 flex-col border-r border-ink-100/70 bg-white/40 px-5 py-8 backdrop-blur md:flex">
-          <div className="flex items-center gap-2">
-            <Radar className="h-5 w-5 text-teal-700" />
-            <div>
-              <div className="font-display text-xl leading-none">Lomad</div>
-              <div className="mt-1 text-[11px] uppercase tracking-[0.18em] text-ink-500">
-                Crawler
-              </div>
-            </div>
-          </div>
-
-          <nav className="mt-10 space-y-1 text-sm">
-            {NAV_ITEMS.map((item) => {
-              const active = nav === item.id;
-              const Icon = item.icon;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => setNav(item.id)}
-                  className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left transition ${
-                    active
-                      ? 'bg-ink-900 text-sand-50'
-                      : 'text-ink-600 hover:bg-sand-100 hover:text-ink-900'
-                  }`}
-                >
-                  <Icon className="h-4 w-4" />
-                  {item.label}
-                </button>
-              );
-            })}
-          </nav>
-
-          <p className="mt-auto pt-16 text-xs leading-relaxed text-ink-500">
-            중고나라 · 번개장터 · 당근
-            <br />
-            렌탈 가구 재판매 탐지
+    <AppShell
+      badges={badges}
+      accordionOpen={accordionOpen}
+      onAccordionChange={onAccordionChange}
+      workerCount={workerCount}
+      queueCount={queueCount}
+      mobileNavOpen={mobileNavOpen}
+      onMobileNavOpenChange={setMobileNavOpen}
+      title={
+        <div>
+          <p className="text-xs uppercase tracking-[0.18em] text-ink-500">
+            Investigation console
           </p>
-        </aside>
-
-        <main className="min-w-0 flex-1 px-4 py-5 sm:px-8 sm:py-6">
-          <header className="mb-4 animate-fadeUp sm:mb-5">
-            <div className="flex flex-wrap items-end justify-between gap-3">
-              <div>
-                <p className="text-xs uppercase tracking-[0.18em] text-ink-500">
-                  Investigation console
-                </p>
-                <h1 className="mt-1 font-display text-2xl text-ink-950 sm:text-3xl">
-                  Search Crawler
-                </h1>
-              </div>
-              <div className="w-full rounded-2xl border border-ink-100/80 bg-white/60 px-4 py-2.5 shadow-soft sm:w-auto sm:min-w-[320px]">
-                <HealthBar
-                  health={health}
-                  apiKey={apiKey}
-                  onApiKeyChange={onApiKeyChange}
-                />
-              </div>
-            </div>
-            {error ? (
-              <p className="mt-3 rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-800">
-                {error}
-              </p>
-            ) : null}
-          </header>
-
-          {nav === 'dashboard' ? (
+          <h1 className="mt-1 font-display text-2xl text-ink-950 sm:text-3xl">
+            Search Crawler
+          </h1>
+        </div>
+      }
+      actions={
+        <div className="w-full rounded-2xl border border-ink-100/80 bg-white/60 px-4 py-2.5 shadow-soft sm:w-auto sm:min-w-[320px]">
+          <HealthBar
+            health={health}
+            apiKey={apiKey}
+            onApiKeyChange={onApiKeyChange}
+          />
+        </div>
+      }
+      banner={
+        error ? (
+          <p className="mt-3 rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-800">
+            {error}
+          </p>
+        ) : null
+      }
+    >
+      <Routes>
+        <Route
+          path="/"
+          element={
             <div className="space-y-5">
-              {/* 검색이 항상 최상단 · 스크롤해도 유지 */}
               <div className="sticky top-0 z-20 space-y-3 bg-[#f7f5f1]/95 py-2 backdrop-blur-md">
                 <SearchToolbar busy={busy} onSubmit={onSubmit} />
                 <SearchProgressPanel progress={progress} />
@@ -298,11 +341,34 @@ export default function App() {
                 <ResultsPanel detail={detail} busy={busy} />
               </div>
 
-              <StatsStrip stats={stats} />
+              <DashboardSummary stats={stats} />
             </div>
-          ) : null}
-        </main>
-      </div>
-    </div>
+          }
+        />
+        <Route
+          path="/search"
+          element={<PlaceholderPage eyebrow="Search" title="상품 검색" />}
+        />
+        <Route
+          path="/history"
+          element={
+            <HistoryPage
+              stats={stats}
+              activeId={detail?.searchId ?? activeSearchId}
+              onSelectSearch={onSelectSearchFromHistory}
+            />
+          }
+        />
+        <Route
+          path="/investigation"
+          element={
+            <PlaceholderPage eyebrow="Investigation" title="Coming Soon" />
+          }
+        />
+        <Route path="/analytics" element={<AnalyticsPage stats={stats} />} />
+        <Route path="/system" element={<SystemPage health={health} />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </AppShell>
   );
 }
