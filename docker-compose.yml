@@ -1,0 +1,93 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: crawler
+      POSTGRES_PASSWORD: crawler
+      POSTGRES_DB: search_crawler
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U crawler -d search_crawler"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  elastic:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.17.0
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    ports:
+      - "9200:9200"
+    volumes:
+      - esdata:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:9200 >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  crawler-api:
+    build: .
+    command: ["node", "-r", "./dist/register-paths.js", "dist/main.js"]
+    env_file:
+      - .env
+    environment:
+      DB_HOST: postgres
+      REDIS_HOST: redis
+      ELASTIC_NODE: http://elastic:9200
+      ENABLE_WORKER: "false"
+      PORT: 3100
+    ports:
+      - "3100:3100"
+    volumes:
+      - image_storage:/app/storage/images
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      elastic:
+        condition: service_healthy
+
+  crawler-worker:
+    build: .
+    command: ["node", "-r", "./dist/register-paths.js", "dist/worker.js"]
+    env_file:
+      - .env
+    environment:
+      DB_HOST: postgres
+      REDIS_HOST: redis
+      ELASTIC_NODE: http://elastic:9200
+      ENABLE_WORKER: "true"
+      CRAWL_CONCURRENCY: 5
+    volumes:
+      - image_storage:/app/storage/images
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      elastic:
+        condition: service_healthy
+    deploy:
+      replicas: 1
+
+volumes:
+  pgdata:
+  esdata:
+  image_storage:
