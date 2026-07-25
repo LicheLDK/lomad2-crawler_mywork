@@ -1,12 +1,23 @@
 import { siteLabel } from '../lib/format';
-import type { CrawlProgressEvent } from '../lib/socket';
 
-const TERMINAL = new Set(['completed', 'partial', 'failed']);
+const TERMINAL = new Set(['completed', 'partial', 'failed', 'cached']);
+
+/** 대시보드 크롤 progress 또는 Search Job progress 공통 뷰 */
+export type ProgressBarView = {
+  status: string;
+  currentSite?: string | null;
+  /** 0~100 */
+  percent: number;
+  resultCount: number;
+  message?: string;
+  completedSites?: string[];
+  pendingSites?: string[];
+};
 
 export function SearchProgressPanel({
   progress,
 }: {
-  progress: CrawlProgressEvent | null;
+  progress: ProgressBarView | null;
 }) {
   if (!progress) return null;
   if (TERMINAL.has(progress.status)) return null;
@@ -31,45 +42,63 @@ export function SearchProgressPanel({
       <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-white/80">
         <div
           className="h-full rounded-full bg-teal-600 transition-all duration-500"
-          style={{ width: `${progress.percent}%` }}
+          style={{ width: `${Math.max(0, Math.min(100, progress.percent))}%` }}
         />
       </div>
 
       <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-xl border border-teal-100/80 bg-white/70 px-3 py-2.5">
-          <dt className="text-xs text-ink-500">현재 검색 사이트</dt>
+          <dt className="text-xs text-ink-500">Status</dt>
+          <dd className="mt-1 font-medium capitalize text-ink-900">
+            {progress.status}
+          </dd>
+        </div>
+        <div className="rounded-xl border border-teal-100/80 bg-white/70 px-3 py-2.5">
+          <dt className="text-xs text-ink-500">Current Site</dt>
           <dd className="mt-1 font-medium text-ink-900">
             {progress.currentSite
               ? siteLabel(progress.currentSite)
-              : progress.status === 'queued'
+              : progress.status === 'queued' || progress.status === 'pending'
                 ? '대기중'
                 : '—'}
           </dd>
         </div>
         <div className="rounded-xl border border-teal-100/80 bg-white/70 px-3 py-2.5">
-          <dt className="text-xs text-ink-500">완료된 사이트</dt>
-          <dd className="mt-1 font-medium text-ink-900">
-            {progress.completedSites.length
-              ? progress.completedSites.map(siteLabel).join(' · ')
-              : '없음'}
+          <dt className="text-xs text-ink-500">Progress</dt>
+          <dd className="mt-1 font-display text-xl tabular-nums text-ink-900">
+            {progress.percent}
+            <span className="ml-1 font-sans text-sm text-ink-500">%</span>
           </dd>
         </div>
         <div className="rounded-xl border border-teal-100/80 bg-white/70 px-3 py-2.5">
-          <dt className="text-xs text-ink-500">남은 사이트</dt>
-          <dd className="mt-1 font-medium text-ink-900">
-            {progress.pendingSites.length
-              ? progress.pendingSites.map(siteLabel).join(' · ')
-              : '없음'}
-          </dd>
-        </div>
-        <div className="rounded-xl border border-teal-100/80 bg-white/70 px-3 py-2.5">
-          <dt className="text-xs text-ink-500">수집 결과</dt>
+          <dt className="text-xs text-ink-500">Result Count</dt>
           <dd className="mt-1 font-display text-xl tabular-nums text-ink-900">
             {progress.resultCount}
             <span className="ml-1 font-sans text-sm text-ink-500">건</span>
           </dd>
         </div>
       </dl>
+
+      {progress.completedSites?.length || progress.pendingSites?.length ? (
+        <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
+          <div className="rounded-xl border border-teal-100/80 bg-white/70 px-3 py-2.5">
+            <dt className="text-xs text-ink-500">완료된 사이트</dt>
+            <dd className="mt-1 font-medium text-ink-900">
+              {progress.completedSites?.length
+                ? progress.completedSites.map(siteLabel).join(' · ')
+                : '없음'}
+            </dd>
+          </div>
+          <div className="rounded-xl border border-teal-100/80 bg-white/70 px-3 py-2.5">
+            <dt className="text-xs text-ink-500">남은 사이트</dt>
+            <dd className="mt-1 font-medium text-ink-900">
+              {progress.pendingSites?.length
+                ? progress.pendingSites.map(siteLabel).join(' · ')
+                : '없음'}
+            </dd>
+          </div>
+        </dl>
+      ) : null}
     </section>
   );
 }

@@ -1,0 +1,6 @@
+{
+  "key": "keyword",
+  "version": 1,
+  "name": "Keyword Generator",
+  "description": "렌탈 상품 속성 → 중고 검색어 배열"
+}

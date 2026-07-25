@@ -1,0 +1,6 @@
+{
+  "key": "image",
+  "version": 1,
+  "name": "Image Analysis (Vision)",
+  "description": "렌탈 vs 매물 이미지 유사도"
+}

@@ -3,6 +3,7 @@ import {
   BarChart3,
   History,
   LayoutDashboard,
+  Package,
   Search,
   Settings,
   ShieldAlert,
@@ -15,6 +16,7 @@ import {
 export type NavId =
   | 'dashboard'
   | 'search'
+  | 'rental'
   | 'history'
   | 'investigation'
   | 'analytics'
@@ -75,6 +77,12 @@ export const NAV_SECTIONS: NavSection[] = [
             disabledHint: '준비중',
           },
         ],
+      },
+      {
+        id: 'rental',
+        label: 'Rental',
+        icon: Package,
+        path: '/rental',
       },
       {
         id: 'history',

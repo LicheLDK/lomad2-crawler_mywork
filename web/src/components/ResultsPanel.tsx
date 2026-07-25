@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
+import { ShieldAlert } from 'lucide-react';
 import type { SearchDetail, SearchResult } from '../types';
 import { resolveAssetUrl } from '../api';
 import {
@@ -10,6 +11,7 @@ import {
   statusTone,
   suspicionLabel,
 } from '../lib/format';
+import { useStartInvestigation } from '../features/investigation';
 import { ResultDrawer } from './ResultDrawer';
 
 type SortKey = 'similarity' | 'price' | 'date' | 'site';
@@ -82,6 +84,7 @@ export function ResultsPanel({
   const [selected, setSelected] = useState<SearchResult | null>(null);
   /** Drawer 닫힌 직후 같은 클릭이 카드로 전달되어 다시 열리는 것 방지 */
   const ignoreSelectUntil = useRef(0);
+  const startInvestigationFromResult = useStartInvestigation();
 
   function openDetail(row: SearchResult) {
     if (Date.now() < ignoreSelectUntil.current) return;
@@ -91,6 +94,12 @@ export function ResultsPanel({
   function closeDetail() {
     ignoreSelectUntil.current = Date.now() + 400;
     setSelected(null);
+  }
+
+  function startInvestigation(row: SearchResult, e?: React.SyntheticEvent) {
+    e?.preventDefault();
+    e?.stopPropagation();
+    startInvestigationFromResult(row);
   }
 
   const results = detail?.results || [];
@@ -154,7 +163,7 @@ export function ResultsPanel({
   }, [detail, results, inFlight]);
 
   return (
-    <section className="flex h-full min-h-[420px] flex-col rounded-2xl border border-ink-100/80 bg-white/75 p-4 shadow-soft sm:p-5">
+    <section className="flex min-h-[420px] flex-col rounded-2xl border border-ink-100/80 bg-white/75 p-4 shadow-soft sm:p-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-xs uppercase tracking-[0.16em] text-ink-500">
@@ -381,9 +390,19 @@ export function ResultsPanel({
                   </span>
                 </div>
 
-                {/* 7) Drawer 유도 — 페이지 이동 없음 */}
-                <div className="mt-auto pt-3 text-sm font-medium text-teal-700 transition group-hover:text-teal-600">
-                  상세 · AI 분석 →
+                {/* 7) 조사 시작 — 페이지 이동 없음 */}
+                <div className="mt-auto space-y-2 pt-3">
+                  <button
+                    type="button"
+                    onClick={(e) => startInvestigation(row, e)}
+                    className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-teal-600/30 bg-teal-50 px-3 py-2 text-sm font-medium text-teal-800 transition hover:bg-teal-100"
+                  >
+                    <ShieldAlert className="h-3.5 w-3.5" />
+                    조사 시작
+                  </button>
+                  <div className="text-sm font-medium text-teal-700 transition group-hover:text-teal-600">
+                    상세 · AI 분석 →
+                  </div>
                 </div>
               </article>
             );
@@ -400,6 +419,7 @@ export function ResultsPanel({
         keyword={detail?.keyword}
         referenceImageUrl={detail?.referenceImageUrl}
         onClose={closeDetail}
+        onStartInvestigation={startInvestigation}
       />
     </section>
   );

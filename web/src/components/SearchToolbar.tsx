@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Search, RefreshCw } from 'lucide-react';
 import type { SiteCode } from '../types';
 
@@ -10,9 +10,12 @@ const SITES: { code: SiteCode; label: string }[] = [
 
 export function SearchToolbar({
   busy,
+  keyword: keywordProp,
   onSubmit,
 }: {
   busy: boolean;
+  /** 현재 보고 있는 검색 키워드 — 이력 선택 시 동기화 */
+  keyword?: string | null;
   onSubmit: (payload: {
     keyword: string;
     sites: SiteCode[];
@@ -20,7 +23,7 @@ export function SearchToolbar({
     forceCrawl: boolean;
   }) => void;
 }) {
-  const [keyword, setKeyword] = useState('시몬스 침대');
+  const [keyword, setKeyword] = useState(keywordProp?.trim() || '');
   const [sites, setSites] = useState<SiteCode[]>([
     'joonggonara',
     'bungae',
@@ -29,6 +32,12 @@ export function SearchToolbar({
   const [maxResults, setMaxResults] = useState(10);
   const [forceCrawl, setForceCrawl] = useState(false);
   const [showOptions, setShowOptions] = useState(false);
+
+  useEffect(() => {
+    if (keywordProp != null && keywordProp.trim()) {
+      setKeyword(keywordProp.trim());
+    }
+  }, [keywordProp]);
 
   function toggleSite(code: SiteCode) {
     setSites((prev) =>

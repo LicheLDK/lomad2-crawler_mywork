@@ -1,0 +1,6 @@
+{
+  "key": "recommendation",
+  "version": 1,
+  "name": "AI Recommendation",
+  "description": "추천 액션 패널 (Summary 와 분리)"
+}

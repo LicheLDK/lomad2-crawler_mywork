@@ -2,6 +2,10 @@
 
 Laravel 쇼핑몰 등 **외부 서버**에서 렌탈 상품명으로 중고거래 재판매 여부를 조회할 때 사용하는 REST API 정리입니다.
 
+> **백오피스(lomad2-admin) 연동 플로우·필드 매핑·Rental Client** 는  
+> [`docs/백오피스_연동_가이드.md`](./백오피스_연동_가이드.md) 를 참고하세요.  
+> (admin 소스는 이 저장소에서 수정하지 않음 — 가이드만)
+
 - Base URL: `http://{host}:3100/api`
 - 대화형 문서: `http://{host}:3100/docs` · Swagger `http://{host}:3100/docs/swagger`
 - 인증: 모든 보호 API에 헤더 `x-api-key` 필수 (값은 서버 `.env`의 `API_KEY`)
@@ -450,6 +454,12 @@ GET /api/search/{searchId}
 
 | Method | Path | Auth | 설명 |
 |--------|------|------|------|
+| `POST` | `/api/search-jobs` | ✅ | BackOffice Search Job 생성 (즉시 jobId) |
+| `GET` | `/api/search-jobs/:id` | ✅ | Search Job 상태 조회 |
+| `GET` | `/api/search-jobs/:id/progress` | ✅ | 진행률 (status·site·progress·resultCount) |
+| `GET` | `/api/investigations` | ✅ | Investigation Case 목록 |
+| `GET` | `/api/investigations/config` | ✅ | AI Score 자동생성 기준 |
+| `GET` | `/api/investigations/:id` | ✅ | Investigation 상세 |
 | `POST` | `/api/search` | ✅ | 검색 (캐시 → 크롤) |
 | `GET` | `/api/search/:id` | ✅ | 상태·결과 조회 |
 | `GET` | `/api/result` | ✅ | 결과 목록 |
@@ -459,5 +469,7 @@ GET /api/search/{searchId}
 | `DELETE` | `/api/cache` | ✅ | Redis 캐시 삭제 |
 | `GET` | `/api/health` | ❌ | 헬스 |
 | `GET` | `/api/storage/images/:resultId` | ❌ | 저장 이미지 |
+
+> BackOffice 「중고 검색」은 `/api/search-jobs` 사용. 상세: `docs/백오피스_연동_가이드.md`
 
 Socket.IO namespace: `/crawl` (진행률, 선택)

@@ -1,10 +1,16 @@
 import { DataSource } from 'typeorm';
 import { config as loadEnv } from 'dotenv';
 import {
+  AiPromptHistory,
+  AiPromptVersion,
+  AiRule,
+  AiUsageLog,
   CrawlerResult,
   CrawlerSite,
   ImageHash,
+  InvestigationCaseEntity,
   SearchHistory,
+  SearchJob,
   SearchKeyword,
 } from './entities';
 
@@ -23,6 +29,12 @@ export const AppDataSource = new DataSource({
     SearchHistory,
     CrawlerResult,
     ImageHash,
+    SearchJob,
+    InvestigationCaseEntity,
+    AiUsageLog,
+    AiRule,
+    AiPromptVersion,
+    AiPromptHistory,
   ],
   migrations: ['src/database/migrations/*.ts'],
   synchronize: false,

@@ -17,9 +17,14 @@ import { DashboardSummary } from './components/DashboardSummary';
 import { AppShell } from './components/AppShell';
 import type { NavBadgeMap } from './components/AppSidebar';
 import { HistoryPage } from './pages/HistoryPage';
+import { RentalPage } from './pages/RentalPage';
 import { AnalyticsPage } from './pages/AnalyticsPage';
 import { SystemPage } from './pages/SystemPage';
 import { PlaceholderPage } from './pages/PlaceholderPage';
+import {
+  CaseListPage,
+  CaseSummaryCard,
+} from './features/investigation';
 import { pathMatches, type NavId } from './config/navigation';
 import {
   subscribeSearchProgress,
@@ -203,17 +208,16 @@ export default function App() {
     stopProgressSocket();
     setProgress(null);
     try {
-      const body = {
+      // 강제크롤 = useCache:false 로 /search 호출 (/crawl DTO에는 useCache 없음)
+      const started = await api.search({
         keyword: payload.keyword,
         sites: payload.sites,
         maxResultsPerSite: payload.maxResultsPerSite,
         useCache: !payload.forceCrawl,
-      };
-      const started = payload.forceCrawl
-        ? await api.crawl(body)
-        : await api.search(body);
+      });
 
       const id = started.searchId;
+      void refreshMeta();
       if (
         'results' in started &&
         Array.isArray(started.results) &&
@@ -324,49 +328,95 @@ export default function App() {
         <Route
           path="/"
           element={
-            <div className="space-y-5">
-              <div className="sticky top-0 z-20 space-y-3 bg-[#f7f5f1]/95 py-2 backdrop-blur-md">
-                <SearchToolbar busy={busy} onSubmit={onSubmit} />
+            <div className="flex h-full min-h-0 flex-col gap-4">
+              <div className="shrink-0 space-y-3">
+                <SearchToolbar
+                  busy={busy}
+                  keyword={detail?.keyword}
+                  onSubmit={onSubmit}
+                />
                 <SearchProgressPanel progress={progress} />
               </div>
 
-              <div className="grid gap-5 lg:grid-cols-[260px_minmax(0,1fr)] xl:grid-cols-[280px_minmax(0,1fr)]">
-                <div className="lg:sticky lg:top-[7.5rem] lg:self-start">
+              <div className="grid min-h-0 flex-1 gap-5 lg:grid-cols-[260px_minmax(0,1fr)] xl:grid-cols-[280px_minmax(0,1fr)]">
+                <div className="hidden min-h-0 lg:block">
                   <RecentSearches
                     stats={stats}
                     activeId={detail?.searchId ?? activeSearchId}
                     onSelectSearch={onSelectSearch}
                   />
                 </div>
-                <ResultsPanel detail={detail} busy={busy} />
-              </div>
 
-              <DashboardSummary stats={stats} />
+                <div className="min-h-0 overflow-y-auto overscroll-contain pr-1">
+                  <div className="mb-5 lg:hidden">
+                    <RecentSearches
+                      stats={stats}
+                      activeId={detail?.searchId ?? activeSearchId}
+                      onSelectSearch={onSelectSearch}
+                    />
+                  </div>
+                  <div className="space-y-5">
+                    <ResultsPanel detail={detail} busy={busy} />
+                    <DashboardSummary stats={stats} />
+                    <CaseSummaryCard />
+                  </div>
+                </div>
+              </div>
             </div>
           }
         />
         <Route
           path="/search"
-          element={<PlaceholderPage eyebrow="Search" title="상품 검색" />}
+          element={
+            <div className="h-full overflow-y-auto overscroll-contain">
+              <PlaceholderPage eyebrow="Search" title="상품 검색" />
+            </div>
+          }
+        />
+        <Route
+          path="/rental"
+          element={
+            <div className="h-full min-h-0 overflow-hidden">
+              <RentalPage onSelectSearch={onSelectSearchFromHistory} />
+            </div>
+          }
         />
         <Route
           path="/history"
           element={
-            <HistoryPage
-              stats={stats}
-              activeId={detail?.searchId ?? activeSearchId}
-              onSelectSearch={onSelectSearchFromHistory}
-            />
+            <div className="h-full overflow-y-auto overscroll-contain">
+              <HistoryPage
+                stats={stats}
+                activeId={detail?.searchId ?? activeSearchId}
+                onSelectSearch={onSelectSearchFromHistory}
+              />
+            </div>
           }
         />
         <Route
           path="/investigation"
           element={
-            <PlaceholderPage eyebrow="Investigation" title="Coming Soon" />
+            <div className="h-full overflow-y-auto overscroll-contain">
+              <CaseListPage />
+            </div>
           }
         />
-        <Route path="/analytics" element={<AnalyticsPage stats={stats} />} />
-        <Route path="/system" element={<SystemPage health={health} />} />
+        <Route
+          path="/analytics"
+          element={
+            <div className="h-full overflow-y-auto overscroll-contain">
+              <AnalyticsPage stats={stats} />
+            </div>
+          }
+        />
+        <Route
+          path="/system"
+          element={
+            <div className="h-full overflow-y-auto overscroll-contain">
+              <SystemPage health={health} />
+            </div>
+          }
+        />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </AppShell>

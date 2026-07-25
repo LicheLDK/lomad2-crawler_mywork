@@ -67,7 +67,7 @@ export class StatsService {
       }),
       this.historyRepo.find({
         order: { createdAt: 'DESC' },
-        take: 12,
+        take: 50,
       }),
       this.historyRepo
         .createQueryBuilder('h')

@@ -1,0 +1,6 @@
+{
+  "key": "matching",
+  "version": 1,
+  "name": "Matching Engine",
+  "description": "렌탈 상품 vs 검색 결과 항목별 점수"
+}

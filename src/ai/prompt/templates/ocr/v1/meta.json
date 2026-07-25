@@ -1,0 +1,6 @@
+{
+  "key": "ocr",
+  "version": 1,
+  "name": "OCR Analysis",
+  "description": "OCR 정규화 · 필드 추출"
+}

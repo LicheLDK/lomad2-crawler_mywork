@@ -19,6 +19,7 @@ import { ElasticService } from '@/elastic/elastic.service';
 import { ImageStorageService } from '@/storage/image-storage.service';
 import { CrawlProgressPublisher } from '@/progress/crawl-progress.publisher';
 import { CrawlProgressStatus } from '@/progress/crawl-progress.types';
+import { InvestigationService } from '@/modules/investigation/investigation.service';
 
 export interface CrawlJobPayload {
   searchHistoryId: string;
@@ -38,6 +39,7 @@ export class CrawlerService {
     private readonly elastic: ElasticService,
     private readonly imageStorage: ImageStorageService,
     private readonly progress: CrawlProgressPublisher,
+    private readonly investigationService: InvestigationService,
     @InjectRepository(SearchHistory)
     private readonly searchHistoryRepo: Repository<SearchHistory>,
     @InjectRepository(CrawlerResult)
@@ -171,6 +173,23 @@ export class CrawlerService {
       totalSites: siteCodes.length,
       message: '검색 완료',
     });
+
+    if (
+      history.status === SearchStatus.COMPLETED ||
+      history.status === SearchStatus.PARTIAL
+    ) {
+      try {
+        await this.investigationService.autoCreateFromSearch({
+          searchHistoryId: history.id,
+        });
+      } catch (error) {
+        this.logger.warn(
+          `Investigation auto-create failed: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      }
+    }
 
     return { searchHistoryId: history.id, saved, errors };
   }

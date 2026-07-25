@@ -14,6 +14,10 @@ import { StatsModule } from './modules/stats/stats.module';
 import { QueueModule } from './queue/queue.module';
 import { StorageModule } from './storage/storage.module';
 import { ProgressModule } from './progress/progress.module';
+import { RentalModule } from './api/rental.module';
+import { SearchJobModule } from './modules/search-job/search-job.module';
+import { InvestigationModule } from './modules/investigation/investigation.module';
+import { AiModule } from './ai/ai.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 
 @Module({
@@ -48,6 +52,10 @@ import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
     StatsModule,
     StorageModule,
     ProgressModule,
+    RentalModule,
+    SearchJobModule,
+    InvestigationModule,
+    AiModule,
   ],
   providers: [
     SiteSeedService,

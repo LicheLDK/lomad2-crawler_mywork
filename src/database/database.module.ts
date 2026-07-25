@@ -2,10 +2,16 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import {
+  AiPromptHistory,
+  AiPromptVersion,
+  AiRule,
+  AiUsageLog,
   CrawlerResult,
   CrawlerSite,
   ImageHash,
+  InvestigationCaseEntity,
   SearchHistory,
+  SearchJob,
   SearchKeyword,
 } from './entities';
 
@@ -27,6 +33,12 @@ import {
           SearchHistory,
           CrawlerResult,
           ImageHash,
+          SearchJob,
+          InvestigationCaseEntity,
+          AiUsageLog,
+          AiRule,
+          AiPromptVersion,
+          AiPromptHistory,
         ],
         synchronize: config.get<string>('app.env') !== 'production',
         logging: config.get<string>('app.env') === 'development',
@@ -47,6 +59,12 @@ import {
       SearchHistory,
       CrawlerResult,
       ImageHash,
+      SearchJob,
+      InvestigationCaseEntity,
+      AiUsageLog,
+      AiRule,
+      AiPromptVersion,
+      AiPromptHistory,
     ]),
   ],
   exports: [TypeOrmModule],

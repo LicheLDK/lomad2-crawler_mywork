@@ -42,13 +42,13 @@ export function AppShell({
   };
 
   return (
-    <div className="min-h-screen bg-app-grid text-ink-900">
-      <div className="mx-auto flex min-h-screen max-w-[1600px]">
-        <aside className="hidden w-56 shrink-0 flex-col border-r border-ink-100/70 bg-white/40 px-5 py-8 backdrop-blur lg:flex">
+    <div className="h-dvh overflow-hidden bg-app-grid text-ink-900">
+      <div className="mx-auto flex h-full max-w-[1600px]">
+        <aside className="hidden h-full w-56 shrink-0 flex-col overflow-y-auto border-r border-ink-100/70 bg-white/40 px-5 py-8 backdrop-blur lg:flex">
           <AppSidebar mode="expanded" {...sidebarProps} />
         </aside>
 
-        <aside className="hidden w-[4.5rem] shrink-0 flex-col border-r border-ink-100/70 bg-white/40 px-2 py-8 backdrop-blur md:flex lg:hidden">
+        <aside className="hidden h-full w-[4.5rem] shrink-0 flex-col overflow-y-auto border-r border-ink-100/70 bg-white/40 px-2 py-8 backdrop-blur md:flex lg:hidden">
           <AppSidebar mode="collapsed" {...sidebarProps} />
         </aside>
 
@@ -71,8 +71,8 @@ export function AppShell({
           </div>
         ) : null}
 
-        <main className="min-w-0 flex-1 px-4 py-5 sm:px-8 sm:py-6">
-          <header className="mb-4 animate-fadeUp sm:mb-5">
+        <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-4 py-5 sm:px-8 sm:py-6">
+          <header className="mb-4 shrink-0 animate-fadeUp sm:mb-5">
             <div className="flex flex-wrap items-end justify-between gap-3">
               <div className="flex min-w-0 items-start gap-3">
                 <button
@@ -89,7 +89,7 @@ export function AppShell({
             </div>
             {banner}
           </header>
-          {children}
+          <div className="min-h-0 flex-1 overflow-hidden">{children}</div>
         </main>
       </div>
     </div>

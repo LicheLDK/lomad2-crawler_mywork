@@ -49,8 +49,8 @@ export class SearchService {
     await this.upsertKeyword(keyword);
 
     if (useCache) {
-      const cached = await this.elastic.search({
-        keyword: dto.keyword,
+      const cached = await this.elastic.searchExactKeyword({
+        keyword: dto.keyword.trim(),
         sites,
         size: 50,
       });
@@ -183,7 +183,7 @@ export class SearchService {
       results.length === 0 &&
       (history.status === SearchStatus.CACHED || history.resultCount > 0)
     ) {
-      const cached = await this.elastic.search({
+      const cached = await this.elastic.searchExactKeyword({
         keyword: history.keyword,
         sites: history.sites ?? undefined,
         size: Math.max(history.resultCount || 50, 50),

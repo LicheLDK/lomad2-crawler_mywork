@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Copy, ExternalLink, X } from 'lucide-react';
+import { Copy, ExternalLink, ShieldAlert, X } from 'lucide-react';
 import type { SearchResult } from '../types';
 import { resolveAssetUrl } from '../api';
 import { ImageCompare } from './ImageCompare';
@@ -12,6 +12,7 @@ import {
   siteTone,
   suspicionLabel,
 } from '../lib/format';
+import { useStartInvestigation } from '../features/investigation';
 
 /**
  * 검색 결과 상세 Drawer
@@ -24,17 +25,20 @@ export function ResultDrawer({
   keyword,
   referenceImageUrl,
   onClose,
+  onStartInvestigation,
 }: {
   row: SearchResult | null;
   keyword?: string;
   referenceImageUrl?: string | null;
   onClose: () => void;
+  onStartInvestigation?: (row: SearchResult, e?: React.SyntheticEvent) => void;
 }) {
   const open = Boolean(row);
   const [copied, setCopied] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
+  const startInvestigationFromResult = useStartInvestigation();
 
   function handleClose(e?: React.SyntheticEvent) {
     e?.preventDefault();
@@ -89,6 +93,17 @@ export function ResultDrawer({
     } catch {
       /* ignore */
     }
+  }
+
+  function startInvestigation(e?: React.SyntheticEvent) {
+    e?.preventDefault();
+    e?.stopPropagation();
+    if (!row) return;
+    if (onStartInvestigation) {
+      onStartInvestigation(row, e);
+      return;
+    }
+    startInvestigationFromResult(row);
   }
 
   return createPortal(
@@ -294,8 +309,16 @@ export function ResultDrawer({
           <div className="space-y-2">
           <button
             type="button"
-            onClick={openOriginalInNewTab}
+            onClick={startInvestigation}
             className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-teal-700 px-3 py-2.5 text-sm font-medium text-white transition hover:bg-teal-600"
+          >
+            <ShieldAlert className="h-4 w-4" />
+            조사 시작
+          </button>
+          <button
+            type="button"
+            onClick={openOriginalInNewTab}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-ink-100 bg-sand-50 px-3 py-2.5 text-sm font-medium text-ink-700 transition hover:bg-sand-100"
           >
             원본 게시글 보기
             <ExternalLink className="h-4 w-4" />
