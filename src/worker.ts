@@ -7,8 +7,10 @@ import dns from 'node:dns';
 import { NestFactory } from '@nestjs/core';
 import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module';
+import { assertProductionSecrets } from './config/validate-production-secrets';
 
 dns.setDefaultResultOrder('ipv4first');
+assertProductionSecrets();
 
 async function bootstrap() {
   const app = await NestFactory.createApplicationContext(AppModule, {

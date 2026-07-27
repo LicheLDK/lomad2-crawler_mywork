@@ -2,15 +2,16 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: crawler
-      POSTGRES_PASSWORD: crawler
-      POSTGRES_DB: search_crawler
+      POSTGRES_USER: ${DB_USER:-crawler}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-crawler}
+      POSTGRES_DB: ${DB_NAME:-search_crawler}
+    # 호스트는 loopback만 노출 (외부 LAN SSRF/스캔 완화). 컨테이너 간은 서비스명으로 통신.
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U crawler -d search_crawler"]
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -18,7 +19,7 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -32,7 +33,7 @@ services:
       - xpack.security.enabled=false
       - ES_JAVA_OPTS=-Xms512m -Xmx512m
     ports:
-      - "9200:9200"
+      - "127.0.0.1:9200:9200"
     volumes:
       - esdata:/usr/share/elasticsearch/data
     healthcheck:
@@ -41,6 +42,23 @@ services:
       timeout: 5s
       retries: 20
 
+  # API/Worker 기동 전 스키마 적용 (빈 volume 대응)
+  migrate:
+    build: .
+    command: ["npm", "run", "migration:run:prod"]
+    env_file:
+      - .env
+    environment:
+      DB_HOST: postgres
+      DB_USER: ${DB_USER:-crawler}
+      DB_PASSWORD: ${DB_PASSWORD:-crawler}
+      DB_NAME: ${DB_NAME:-search_crawler}
+      NODE_ENV: production
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
   crawler-api:
     build: .
     command: ["node", "-r", "./dist/register-paths.js", "dist/main.js"]
@@ -48,15 +66,20 @@ services:
       - .env
     environment:
       DB_HOST: postgres
+      DB_USER: ${DB_USER:-crawler}
+      DB_PASSWORD: ${DB_PASSWORD:-crawler}
+      DB_NAME: ${DB_NAME:-search_crawler}
       REDIS_HOST: redis
       ELASTIC_NODE: http://elastic:9200
       ENABLE_WORKER: "false"
       PORT: 3100
     ports:
-      - "3100:3100"
+      - "127.0.0.1:3100:3100"
     volumes:
       - image_storage:/app/storage/images
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:
@@ -71,6 +94,9 @@ services:
       - .env
     environment:
       DB_HOST: postgres
+      DB_USER: ${DB_USER:-crawler}
+      DB_PASSWORD: ${DB_PASSWORD:-crawler}
+      DB_NAME: ${DB_NAME:-search_crawler}
       REDIS_HOST: redis
       ELASTIC_NODE: http://elastic:9200
       ENABLE_WORKER: "true"
@@ -78,6 +104,8 @@ services:
     volumes:
       - image_storage:/app/storage/images
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:
@@ -86,6 +114,19 @@ services:
         condition: service_healthy
     deploy:
       replicas: 1
+
+  # React 대시보드 (nginx 정적 + /api·socket.io → crawler-api)
+  dashboard:
+    build:
+      context: ./web
+      args:
+        VITE_API_BASE: /api
+        VITE_SOCKET_URL: ""
+        VITE_BACKOFFICE_ORDER_URL_TEMPLATE: ${BACKOFFICE_ORDER_URL_TEMPLATE:-}
+    ports:
+      - "127.0.0.1:8080:80"
+    depends_on:
+      - crawler-api
 
 volumes:
   pgdata:

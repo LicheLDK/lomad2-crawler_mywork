@@ -10,7 +10,6 @@ import { Repository } from 'typeorm';
 import Redis from 'ioredis';
 import {
   SearchJob,
-  SearchJobStatus,
 } from '@/database/entities/search-job.entity';
 import {
   CRAWL_PROGRESS_CHANNEL,
@@ -20,8 +19,10 @@ import {
   SEARCH_JOB_PROGRESS_CHANNEL,
   SearchJobProgressEvent,
 } from './search-job-progress.types';
-
-/**
+import {
+  applyCrawlProgressToJob,
+  clampProgress,
+} from './search-job-status.util';/**
  * 크롤 progress(searchId) → Search Job progress(jobId) 동기화.
  * Redis pub/sub + DB 컬럼 갱신 + job progress 채널 발행.
  */
@@ -111,33 +112,7 @@ export class SearchJobProgressSync
       });
       if (!job) return;
 
-      job.progress = clampProgress(crawl.percent);
-      job.currentSite = crawl.currentSite;
-      job.resultCount = crawl.resultCount ?? job.resultCount;
-
-      if (crawl.status === 'failed') {
-        job.status = SearchJobStatus.FAILED;
-        job.finishedAt = new Date();
-        job.errorMessage = crawl.message || 'Search failed';
-      } else if (
-        crawl.status === 'completed' ||
-        crawl.status === 'partial'
-      ) {
-        job.status = SearchJobStatus.COMPLETED;
-        job.finishedAt = new Date();
-        job.progress = 100;
-        job.currentSite = null;
-      } else if (crawl.status === 'running' || crawl.status === 'queued') {
-        if (
-          job.status !== SearchJobStatus.FAILED &&
-          job.status !== SearchJobStatus.COMPLETED
-        ) {
-          job.status =
-            crawl.status === 'queued'
-              ? SearchJobStatus.QUEUED
-              : SearchJobStatus.RUNNING;
-        }
-      }
+      applyCrawlProgressToJob(job, crawl);
 
       await this.jobRepo.save(job);
       await this.publishFromJob(job, crawl.message);
@@ -173,9 +148,4 @@ export class SearchJobProgressSync
       );
     }
   }
-}
-
-function clampProgress(value: number | null | undefined): number {
-  if (value == null || !Number.isFinite(value)) return 0;
-  return Math.max(0, Math.min(100, Math.round(value)));
 }

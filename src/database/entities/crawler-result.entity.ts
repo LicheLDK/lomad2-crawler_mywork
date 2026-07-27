@@ -19,6 +19,10 @@ export class CrawlerResult {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 
+  /**
+   * 마지막으로 이 매물을 발견한 검색 이력(참고용).
+   * 검색 결과 소속은 search_history_results 스냅샷이 정본이다.
+   */
   @ManyToOne(() => SearchHistory, (history) => history.results, {
     nullable: true,
     onDelete: 'SET NULL',

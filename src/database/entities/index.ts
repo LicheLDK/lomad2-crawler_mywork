@@ -1,6 +1,7 @@
 export { CrawlerSite } from './crawler-site.entity';
 export { SearchKeyword } from './search-keyword.entity';
 export { SearchHistory, SearchStatus } from './search-history.entity';
+export { SearchHistoryResult } from './search-history-result.entity';
 export { CrawlerResult } from './crawler-result.entity';
 export { ImageHash } from './image-hash.entity';
 export { SearchJob, SearchJobStatus } from './search-job.entity';

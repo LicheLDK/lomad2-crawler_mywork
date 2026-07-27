@@ -11,6 +11,7 @@ import {
   ImageHash,
   InvestigationCaseEntity,
   SearchHistory,
+  SearchHistoryResult,
   SearchJob,
   SearchKeyword,
 } from './entities';
@@ -31,6 +32,7 @@ import {
           CrawlerSite,
           SearchKeyword,
           SearchHistory,
+          SearchHistoryResult,
           CrawlerResult,
           ImageHash,
           SearchJob,
@@ -57,6 +59,7 @@ import {
       CrawlerSite,
       SearchKeyword,
       SearchHistory,
+      SearchHistoryResult,
       CrawlerResult,
       ImageHash,
       SearchJob,

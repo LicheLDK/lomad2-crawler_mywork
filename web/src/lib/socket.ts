@@ -1,8 +1,24 @@
 import { io, Socket } from 'socket.io-client';
 
-const SOCKET_URL =
-  import.meta.env.VITE_SOCKET_URL?.replace(/\/$/, '') ||
-  'http://127.0.0.1:3100';
+/**
+ * Docker nginx(same-origin) 빌드: VITE_SOCKET_URL="" → window.location.origin
+ * 로컬 Vite: 미설정 → http://127.0.0.1:3100
+ */
+function resolveSocketUrl(): string {
+  const raw = import.meta.env.VITE_SOCKET_URL;
+  if (raw === '') {
+    if (typeof window !== 'undefined' && window.location?.origin) {
+      return window.location.origin;
+    }
+    return '';
+  }
+  if (typeof raw === 'string' && raw.length > 0) {
+    return raw.replace(/\/$/, '');
+  }
+  return 'http://127.0.0.1:3100';
+}
+
+const SOCKET_URL = resolveSocketUrl();
 
 export type CrawlProgressEvent = {
   searchId: string;

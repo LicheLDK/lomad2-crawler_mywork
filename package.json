@@ -14,15 +14,21 @@
     "start:worker:dev": "cross-env ENABLE_WORKER=true ts-node -r tsconfig-paths/register src/worker.ts",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
     "test": "jest",
+    "test:migration": "powershell -ExecutionPolicy Bypass -File scripts/test-migration-empty-volume.ps1",
     "typeorm": "typeorm-ts-node-commonjs",
     "migration:run": "npm run typeorm -- migration:run -d src/database/data-source.ts",
+    "migration:run:prod": "node -r ./dist/register-paths.js ./node_modules/typeorm/cli.js migration:run -d dist/database/data-source.js",
+    "migration:show": "npm run typeorm -- migration:show -d src/database/data-source.ts",
+    "migration:revert": "npm run typeorm -- migration:revert -d src/database/data-source.ts",
     "migration:generate": "npm run typeorm -- migration:generate -d src/database/data-source.ts",
+    "migration:baseline:mark": "ts-node -r tsconfig-paths/register src/database/scripts/mark-baseline-migrated.ts",
     "postinstall": "playwright install chromium || true",
     "backup": "powershell -ExecutionPolicy Bypass -File scripts/backup-source.ps1",
     "infra:up": "docker compose up -d postgres redis elastic",
     "infra:down": "docker compose stop postgres redis elastic",
     "web:dev": "npm --prefix web run dev",
     "web:build": "npm --prefix web run build",
+    "web:build:check": "npm --prefix web install && npm --prefix web run build",
     "build:all": "npm run build && npm run web:build",
     "pm2:start": "pm2 start ecosystem.config.js",
     "pm2:reload": "pm2 reload ecosystem.config.js",
@@ -78,5 +84,20 @@
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
     "typescript": "^5.7.3"
+  },
+  "jest": {
+    "moduleFileExtensions": ["js", "json", "ts"],
+    "rootDir": "src",
+    "testRegex": ".*\\.spec\\.ts$",
+    "transform": {
+      "^.+\\.(t|j)s$": "ts-jest"
+    },
+    "collectCoverageFrom": ["**/*.(t|j)s"],
+    "coverageDirectory": "../coverage",
+    "testEnvironment": "node",
+    "moduleNameMapper": {
+      "^@/(.*)$": "<rootDir>/$1"
+    },
+    "forceExit": true
   }
 }

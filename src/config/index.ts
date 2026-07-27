@@ -5,6 +5,7 @@ import elasticConfig from './elastic.config';
 import crawlerConfig from './crawler.config';
 import rentalConfig from './rental.config';
 import investigationConfig from './investigation.config';
+import imageConfig from './image.config';
 import aiConfig from '@/ai/ai.config';
 
 export const configs = [
@@ -15,5 +16,6 @@ export const configs = [
   crawlerConfig,
   rentalConfig,
   investigationConfig,
+  imageConfig,
   aiConfig,
 ];

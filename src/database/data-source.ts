@@ -1,3 +1,4 @@
+import { join } from 'path';
 import { DataSource } from 'typeorm';
 import { config as loadEnv } from 'dotenv';
 import {
@@ -10,12 +11,18 @@ import {
   ImageHash,
   InvestigationCaseEntity,
   SearchHistory,
+  SearchHistoryResult,
   SearchJob,
   SearchKeyword,
 } from './entities';
 
 loadEnv();
 
+/**
+ * TypeORM CLI / migration 전용 DataSource.
+ * - 개발: npm run migration:run (ts-node → src)
+ * - 운영/Docker: npm run migration:run:prod (dist)
+ */
 export const AppDataSource = new DataSource({
   type: 'postgres',
   host: process.env.DB_HOST || '127.0.0.1',
@@ -27,6 +34,7 @@ export const AppDataSource = new DataSource({
     CrawlerSite,
     SearchKeyword,
     SearchHistory,
+    SearchHistoryResult,
     CrawlerResult,
     ImageHash,
     SearchJob,
@@ -36,7 +44,8 @@ export const AppDataSource = new DataSource({
     AiPromptVersion,
     AiPromptHistory,
   ],
-  migrations: ['src/database/migrations/*.ts'],
+  migrations: [join(__dirname, 'migrations', '*.{ts,js}')],
+  migrationsTableName: 'typeorm_migrations',
   synchronize: false,
   logging: process.env.NODE_ENV === 'development',
 });

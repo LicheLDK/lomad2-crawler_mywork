@@ -3,8 +3,8 @@ import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { randomUUID } from 'crypto';
-import { CrawlerResult } from '@/database/entities/crawler-result.entity';
 import { SearchHistory } from '@/database/entities/search-history.entity';
+import { SearchHistoryResult } from '@/database/entities/search-history-result.entity';
 import { SearchJob } from '@/database/entities/search-job.entity';
 import {
   InvestigationAiAnalysis,
@@ -31,8 +31,8 @@ export class InvestigationService {
   constructor(
     @InjectRepository(InvestigationCaseEntity)
     private readonly caseRepo: Repository<InvestigationCaseEntity>,
-    @InjectRepository(CrawlerResult)
-    private readonly resultRepo: Repository<CrawlerResult>,
+    @InjectRepository(SearchHistoryResult)
+    private readonly historyResultRepo: Repository<SearchHistoryResult>,
     @InjectRepository(SearchHistory)
     private readonly historyRepo: Repository<SearchHistory>,
     @InjectRepository(SearchJob)
@@ -136,20 +136,21 @@ export class InvestigationService {
       params.results && params.results.length > 0
         ? params.results
         : (
-            await this.resultRepo.find({
+            await this.historyResultRepo.find({
               where: { searchHistoryId: params.searchHistoryId },
+              relations: ['result'],
               order: { createdAt: 'DESC' },
               take: 200,
             })
-          ).map((r) => ({
-            id: r.id,
-            title: r.title,
-            siteCode: r.siteCode,
-            url: r.url,
-            imageUrl: r.imageUrl,
-            price: r.price,
-            titleSimilarity: r.titleSimilarity,
-            imageSimilarity: r.imageSimilarity,
+          ).map((link) => ({
+            id: link.result?.id ?? link.resultId,
+            title: link.title,
+            siteCode: link.result?.siteCode ?? '',
+            url: link.result?.url ?? '',
+            imageUrl: link.imageUrl,
+            price: link.price,
+            titleSimilarity: link.titleSimilarity,
+            imageSimilarity: link.imageSimilarity,
             matchingScore: null as number | null,
             aiScore: null as number | null,
             matchingReason: null as string | null,

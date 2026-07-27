@@ -5,6 +5,7 @@ import { ConfigService } from '@nestjs/config';
 import {
   CrawlerResult,
   SearchHistory,
+  SearchHistoryResult,
   SearchKeyword,
   SearchStatus,
 } from '@/database/entities';
@@ -30,6 +31,8 @@ export class SearchService {
     private readonly keywordRepo: Repository<SearchKeyword>,
     @InjectRepository(CrawlerResult)
     private readonly resultRepo: Repository<CrawlerResult>,
+    @InjectRepository(SearchHistoryResult)
+    private readonly historyResultRepo: Repository<SearchHistoryResult>,
     private readonly elastic: ElasticService,
     private readonly crawlQueue: CrawlQueueService,
     private readonly cache: CacheService,
@@ -68,6 +71,7 @@ export class SearchService {
           }),
         );
 
+        await this.linkCachedResults(history.id, cached);
         const results = cached.map((doc) => this.fromElasticDoc(doc, history.id));
 
         return {
@@ -169,16 +173,15 @@ export class SearchService {
     }
 
     let results: unknown[] = (
-      await this.resultRepo.find({
+      await this.historyResultRepo.find({
         where: { searchHistoryId: id },
-        relations: ['imageHash'],
+        relations: ['result', 'result.imageHash'],
         order: { createdAt: 'DESC' },
         take: 100,
       })
-    ).map((r) => this.toResultDto(r));
+    ).map((link) => this.toSnapshotDto(link));
 
-    // Elastic 캐시 히트 이력은 crawler_result에 searchHistoryId가 연결되지 않음
-    // → DB 결과가 비어 있으면 Elastic에서 동일 키워드로 재조회
+    // Elastic 캐시 히트 이력은 listing이 없으면 스냅샷이 비어 있을 수 있음
     if (
       results.length === 0 &&
       (history.status === SearchStatus.CACHED || history.resultCount > 0)
@@ -212,6 +215,35 @@ export class SearchService {
   async getResults(query: QueryResultDto) {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
+
+    if (query.searchId) {
+      const qb = this.historyResultRepo
+        .createQueryBuilder('shr')
+        .leftJoinAndSelect('shr.result', 'r')
+        .leftJoinAndSelect('r.imageHash', 'imageHash')
+        .where('shr.searchHistoryId = :searchId', {
+          searchId: query.searchId,
+        })
+        .orderBy('shr.createdAt', 'DESC')
+        .skip((page - 1) * limit)
+        .take(limit);
+
+      if (query.keyword) {
+        qb.andWhere('shr.title ILIKE :kw', { kw: `%${query.keyword}%` });
+      }
+      if (query.site) {
+        qb.andWhere('r.siteCode = :site', { site: query.site });
+      }
+
+      const [items, total] = await qb.getManyAndCount();
+      return {
+        page,
+        limit,
+        total,
+        items: items.map((link) => this.toSnapshotDto(link)),
+      };
+    }
+
     const qb = this.resultRepo
       .createQueryBuilder('r')
       .leftJoinAndSelect('r.imageHash', 'imageHash')
@@ -224,11 +256,6 @@ export class SearchService {
     }
     if (query.site) {
       qb.andWhere('r.siteCode = :site', { site: query.site });
-    }
-    if (query.searchId) {
-      qb.andWhere('r.searchHistoryId = :searchId', {
-        searchId: query.searchId,
-      });
     }
 
     const [items, total] = await qb.getManyAndCount();
@@ -275,6 +302,28 @@ export class SearchService {
     };
   }
 
+  private toSnapshotDto(link: SearchHistoryResult) {
+    const r = link.result;
+    return {
+      id: r?.id ?? link.resultId,
+      searchHistoryId: link.searchHistoryId,
+      siteCode: r?.siteCode ?? null,
+      title: link.title,
+      price: link.price,
+      seller: link.seller,
+      region: link.region,
+      url: r?.url ?? null,
+      imageUrl: link.imageUrl,
+      description: r?.description ?? null,
+      titleSimilarity: link.titleSimilarity,
+      imageSimilarity: link.imageSimilarity,
+      createdAt: link.createdAt,
+      screenshotUrl: r?.imageHash?.localPath
+        ? `storage/images/${r.id}`
+        : null,
+    };
+  }
+
   private toResultDto(r: CrawlerResult) {
     return {
       id: r.id,
@@ -294,6 +343,47 @@ export class SearchService {
         ? `storage/images/${r.id}`
         : null,
     };
+  }
+
+  /** Elastic 캐시 히트 시 DB listing이 있으면 스냅샷 링크 생성 */
+  private async linkCachedResults(
+    searchHistoryId: string,
+    docs: Array<{
+      id: string;
+      title: string;
+      price: number | null;
+      seller: string | null;
+      image: string | null;
+      region?: string | null;
+      titleSimilarity?: number | null;
+      imageSimilarity?: number | null;
+    }>,
+  ): Promise<void> {
+    for (const doc of docs) {
+      const listing = await this.resultRepo.findOne({
+        where: { id: doc.id },
+      });
+      if (!listing) continue;
+
+      const exists = await this.historyResultRepo.findOne({
+        where: { searchHistoryId, resultId: listing.id },
+      });
+      if (exists) continue;
+
+      await this.historyResultRepo.save(
+        this.historyResultRepo.create({
+          searchHistoryId,
+          resultId: listing.id,
+          title: doc.title.slice(0, 500),
+          price: doc.price != null ? String(doc.price) : listing.price,
+          seller: doc.seller ?? listing.seller,
+          region: doc.region ?? listing.region,
+          imageUrl: doc.image ?? listing.imageUrl,
+          titleSimilarity: doc.titleSimilarity ?? 0,
+          imageSimilarity: doc.imageSimilarity ?? 0,
+        }),
+      );
+    }
   }
 
   private async upsertKeyword(keyword: string): Promise<SearchKeyword> {

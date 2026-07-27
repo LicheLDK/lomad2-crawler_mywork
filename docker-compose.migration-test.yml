@@ -1,0 +1,40 @@
+# 빈 PostgreSQL volume에 migration 이 적용되는지 검증 (통합 테스트용)
+# 사용: npm run test:migration
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: crawler
+      POSTGRES_PASSWORD: crawler
+      POSTGRES_DB: search_crawler
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U crawler -d search_crawler"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  migrate:
+    build: .
+    command: ["npm", "run", "migration:run:prod"]
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: crawler
+      DB_PASSWORD: crawler
+      DB_NAME: search_crawler
+      NODE_ENV: production
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  verify:
+    image: postgres:16-alpine
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      PGPASSWORD: crawler
+    volumes:
+      - ./scripts/verify-migrated-schema.sh:/verify.sh:ro
+    entrypoint: ["/bin/sh", "/verify.sh"]

@@ -5,9 +5,11 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule, OpenAPIObject } from '@nestjs/swagger';
 import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module';
+import { assertProductionSecrets } from './config/validate-production-secrets';
 
 // Windows에서 IPv6 dual-stack 조회가 ENOBUFS를 유발하는 경우 완화
 dns.setDefaultResultOrder('ipv4first');
+assertProductionSecrets();
 
 const SWAGGER_UI_CDN =
   'https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.32.8';
@@ -285,6 +287,8 @@ async function bootstrap() {
       'http://localhost:5173',
       'http://127.0.0.1:4173',
       'http://localhost:4173',
+      'http://127.0.0.1:8080',
+      'http://localhost:8080',
     ],
     credentials: true,
     allowedHeaders: ['Content-Type', 'x-api-key'],
