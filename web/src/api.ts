@@ -43,6 +43,7 @@ export const api = {
   health: () =>
     request<import('./types').HealthPayload>('/health', {}, { allowErrorStatus: true }),
   stats: () => request<import('./types').StatsOverview>('/stats'),
+  aiUsageToday: () => request<import('./types').AiUsageToday>('/ai/usage/today'),
   search: (body: unknown) =>
     request<import('./types').SearchDetail>('/search', {
       method: 'POST',

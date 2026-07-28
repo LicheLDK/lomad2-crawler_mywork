@@ -65,6 +65,19 @@ export interface StatsOverview {
   generatedAt: string;
 }
 
+export interface AiUsageToday {
+  date: string;
+  callCount: number;
+  successCount: number;
+  failureCount: number;
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  costUsd: number;
+  avgResponseTimeMs: number;
+  retryTotal: number;
+}
+
 export interface HealthPayload {
   status?: string;
   info?: {

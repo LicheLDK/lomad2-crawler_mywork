@@ -7,7 +7,13 @@ import {
   useNavigate,
 } from 'react-router-dom';
 import { api, getApiKey, setApiKey as persistApiKey } from './api';
-import type { HealthPayload, SearchDetail, SiteCode, StatsOverview } from './types';
+import type {
+  AiUsageToday,
+  HealthPayload,
+  SearchDetail,
+  SiteCode,
+  StatsOverview,
+} from './types';
 import { HealthBar } from './components/HealthBar';
 import { SearchToolbar } from './components/SearchToolbar';
 import { SearchProgressPanel } from './components/SearchProgressPanel';
@@ -49,6 +55,7 @@ export default function App() {
   const [apiKey, setApiKeyState] = useState(getApiKey());
   const [health, setHealth] = useState<HealthPayload | null>(null);
   const [stats, setStats] = useState<StatsOverview | null>(null);
+  const [aiUsageToday, setAiUsageToday] = useState<AiUsageToday | null>(null);
   const [detail, setDetail] = useState<SearchDetail | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -83,11 +90,17 @@ export default function App() {
 
   const refreshMeta = useCallback(async () => {
     try {
-      const [h, s] = await Promise.all([api.health(), api.stats()]);
+      const [h, s, ai] = await Promise.all([
+        api.health(),
+        api.stats(),
+        api.aiUsageToday().catch(() => null),
+      ]);
       setHealth(h);
       setStats(s);
+      setAiUsageToday(ai);
       setError(null);
     } catch (e) {
+      setAiUsageToday(null);
       setError(e instanceof Error ? e.message : String(e));
     }
   }, []);
@@ -346,6 +359,7 @@ export default function App() {
             <OverviewPage
               stats={stats}
               health={health}
+              aiUsageToday={aiUsageToday}
               activeId={detail?.searchId ?? activeSearchId}
               onSelectSearch={onSelectSearchFromHistory}
             />

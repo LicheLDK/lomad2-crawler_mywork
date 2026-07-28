@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { ArrowUpRight, Activity, Cpu } from 'lucide-react';
-import type { HealthPayload, StatsOverview } from '../types';
+import type { AiUsageToday, HealthPayload, StatsOverview } from '../types';
 import { RecentSearches } from '../components/RecentSearches';
 import { DashboardSummary } from '../components/DashboardSummary';
 import { CaseSummaryCard } from '../features/investigation';
@@ -11,11 +11,13 @@ import { CaseSummaryCard } from '../features/investigation';
 export function OverviewPage({
   stats,
   health,
+  aiUsageToday,
   activeId,
   onSelectSearch,
 }: {
   stats: StatsOverview | null;
   health: HealthPayload | null;
+  aiUsageToday: AiUsageToday | null;
   activeId?: string | null;
   onSelectSearch: (id: string) => void;
 }) {
@@ -52,15 +54,15 @@ export function OverviewPage({
           to="/search"
         />
         <OverviewTile
-          label="오늘 Investigation"
+          label="오늘 수집 결과"
           value={stats?.last24h.results ?? '—'}
-          hint="결과 기준 · Case는 Investigation"
+          hint="Stats API · 최근 24시간 결과 기준"
           to="/investigation"
         />
         <OverviewTile
           label="오늘 AI 분석"
-          value={stats?.last24h.searches ?? '—'}
-          hint="검색 연동 요약"
+          value={aiUsageToday?.callCount ?? '—'}
+          hint="AI Usage API · 오늘 호출 수"
           to="/analytics?section=ai"
         />
         <div className="rounded-2xl border border-ink-100/80 bg-white/75 px-4 py-3 shadow-soft backdrop-blur">
