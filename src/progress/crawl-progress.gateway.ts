@@ -4,6 +4,7 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 import {
+  ConnectedSocket,
   MessageBody,
   SubscribeMessage,
   WebSocketGateway,
@@ -100,9 +101,10 @@ export class CrawlProgressGateway implements OnModuleInit, OnModuleDestroy {
 
   @SubscribeMessage('subscribe')
   handleSubscribe(
-    client: Socket,
+    @ConnectedSocket() client: Socket,
     @MessageBody() body: { searchId?: string; jobId?: string },
   ) {
+    if (!client) return { ok: false };
     if (body?.jobId) {
       void client.join(this.jobRoom(body.jobId));
       return { ok: true, jobId: body.jobId };
@@ -115,9 +117,10 @@ export class CrawlProgressGateway implements OnModuleInit, OnModuleDestroy {
 
   @SubscribeMessage('unsubscribe')
   handleUnsubscribe(
-    client: Socket,
+    @ConnectedSocket() client: Socket,
     @MessageBody() body: { searchId?: string; jobId?: string },
   ) {
+    if (!client) return { ok: false };
     if (body?.jobId) {
       void client.leave(this.jobRoom(body.jobId));
       return { ok: true, jobId: body.jobId };

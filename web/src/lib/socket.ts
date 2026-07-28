@@ -82,7 +82,9 @@ export function subscribeSearchProgress(
 
   return () => {
     socket.off('connect', onConnect);
-    socket.emit('unsubscribe', { searchId });
+    if (socket.connected) {
+      socket.emit('unsubscribe', { searchId });
+    }
     socket.off('progress', handler);
     socket.off('progress:broadcast', handler);
   };
@@ -113,7 +115,9 @@ export function subscribeSearchJobProgress(
 
   return () => {
     socket.off('connect', onConnect);
-    socket.emit('unsubscribe', { jobId });
+    if (socket.connected) {
+      socket.emit('unsubscribe', { jobId });
+    }
     socket.off('job:progress', handler);
     socket.off('job:progress:broadcast', handler);
   };
