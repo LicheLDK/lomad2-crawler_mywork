@@ -18,6 +18,7 @@ import type { AiRuleMatch } from '@/ai/rules/ai-rule.types';
 
 export type AutoCreateResult = {
   created: InvestigationCaseEntity[];
+  updated: InvestigationCaseEntity[];
   skipped: number;
   excluded: number;
   warned: number;
@@ -105,6 +106,7 @@ export class InvestigationService {
     if (!this.isAutoCreateEnabled()) {
       return {
         created: [],
+        updated: [],
         skipped: 0,
         excluded: 0,
         warned: 0,
@@ -118,7 +120,14 @@ export class InvestigationService {
       where: { id: params.searchHistoryId },
     });
     if (!history) {
-      return { created: [], skipped: 0, excluded: 0, warned: 0, threshold };
+      return {
+        created: [],
+        updated: [],
+        skipped: 0,
+        excluded: 0,
+        warned: 0,
+        threshold,
+      };
     }
 
     let job: SearchJob | null = null;
@@ -158,6 +167,7 @@ export class InvestigationService {
           }));
 
     const created: InvestigationCaseEntity[] = [];
+    const updated: InvestigationCaseEntity[] = [];
     let skipped = 0;
     let excluded = 0;
     let warned = 0;
@@ -211,7 +221,21 @@ export class InvestigationService {
         where: { resultId: result.id },
       });
       if (existing) {
-        skipped += 1;
+        if (!this.isAiResult(result) || existing.status !== 'Open') {
+          skipped += 1;
+          continue;
+        }
+
+        const updatedCase = await this.updateCaseFromAiResult({
+          existing,
+          result,
+          aiScore: aiScore01,
+          history,
+          job,
+          threshold,
+          ruleWarnings,
+        });
+        updated.push(updatedCase);
         continue;
       }
 
@@ -233,7 +257,13 @@ export class InvestigationService {
       );
     }
 
-    return { created, skipped, excluded, warned, threshold };
+    if (updated.length) {
+      this.logger.log(
+        `Updated ${updated.length} investigation(s) with AI score for search=${params.searchHistoryId}`,
+      );
+    }
+
+    return { created, updated, skipped, excluded, warned, threshold };
   }
 
   async list(limit = 50) {
@@ -589,6 +619,121 @@ export class InvestigationService {
       );
     }
     return saved;
+  }
+
+  private async updateCaseFromAiResult(params: {
+    existing: InvestigationCaseEntity;
+    result: {
+      id: string;
+      title: string;
+      siteCode: string;
+      url: string;
+      imageUrl?: string | null;
+      price?: string | number | null;
+      description?: string | null;
+      titleSimilarity?: number | null;
+      imageSimilarity?: number | null;
+      matchingScore?: number | null;
+      aiScore?: number | null;
+      matchingReason?: string | null;
+      matchingScores?: {
+        brand?: number;
+        model?: number;
+        productName?: number;
+        price?: number;
+        option?: number;
+        color?: number;
+        image?: number;
+        description?: number;
+        ocr?: number;
+      } | null;
+    };
+    aiScore: number;
+    history: SearchHistory;
+    job: SearchJob | null;
+    threshold: number;
+    ruleWarnings?: AiRuleMatch[];
+  }): Promise<InvestigationCaseEntity> {
+    const {
+      existing,
+      result,
+      aiScore,
+      history,
+      job,
+      threshold,
+      ruleWarnings = [],
+    } = params;
+    const now = new Date();
+    const scorePct = Math.round(aiScore * 100);
+    const prevPct = Math.round((existing.aiScore ?? 0) * 100);
+    const orderNo = job?.orderNo?.trim() || existing.orderNo || null;
+    const timeline = Array.isArray(existing.timeline) ? [...existing.timeline] : [];
+
+    timeline.push(
+      this.tl(
+        'ai_score_updated',
+        now.toISOString(),
+        'AI 매칭 점수로 갱신',
+        result.matchingReason
+          ? `AI Score ${scorePct}% (기존 ${prevPct}%) · ${result.matchingReason}`
+          : `AI Score ${scorePct}% (기존 ${prevPct}%) · threshold ${threshold}`,
+      ),
+    );
+
+    for (const warning of ruleWarnings) {
+      timeline.push(
+        this.tl(
+          'ai_rule_warning',
+          now.toISOString(),
+          'AI Rule Warning',
+          warning.message || `${warning.code}: ${warning.field} ${warning.operator} ${warning.value}`,
+        ),
+      );
+    }
+
+    if (orderNo && orderNo !== existing.orderNo) {
+      timeline.push(
+        this.tl(
+          'order_mapped',
+          now.toISOString(),
+          '주문 참조 연결',
+          `orderNo=${orderNo}${job?.id ? ` · jobId=${job.id}` : ''}`,
+        ),
+      );
+    }
+
+    const entity = this.caseRepo.create({
+      ...existing,
+      productName: result.title,
+      listingTitle: result.title,
+      aiScore,
+      priority: this.priorityFromScore(aiScore),
+      siteCode: result.siteCode,
+      url: result.url,
+      imageUrl: result.imageUrl ?? existing.imageUrl,
+      price: result.price != null ? String(result.price) : existing.price,
+      searchHistoryId: history.id,
+      searchJobId: job?.id ?? existing.searchJobId,
+      orderNo,
+      timeline,
+      aiAnalysis: this.buildAiAnalysis(result, aiScore),
+    });
+
+    return this.caseRepo.save(entity);
+  }
+
+  private isAiResult(result: {
+    matchingScore?: number | null;
+    aiScore?: number | null;
+    matchingReason?: string | null;
+    matchingScores?: Record<string, number> | null;
+  }): boolean {
+    return Boolean(
+      (result.aiScore != null && Number.isFinite(result.aiScore)) ||
+        (result.matchingScore != null && Number.isFinite(result.matchingScore)) ||
+        result.matchingReason ||
+        result.matchingScores,
+    );
   }
 
   private computeAiScore(result: {
