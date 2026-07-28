@@ -194,6 +194,20 @@ export class InvestigationService {
         });
 
         if (evaluation.exclude) {
+          if (this.isAiResult(result)) {
+            const existing = await this.caseRepo.findOne({
+              where: { resultId: result.id },
+            });
+            if (existing) {
+              await this.recordAiExcludeRecommendation({
+                existing,
+                result,
+                matchedRules: evaluation.matched,
+                job,
+              });
+            }
+          }
+
           excluded += 1;
           skipped += 1;
           this.logger.debug(
@@ -717,6 +731,55 @@ export class InvestigationService {
       orderNo,
       timeline,
       aiAnalysis: this.buildAiAnalysis(result, aiScore),
+    });
+
+    return this.caseRepo.save(entity);
+  }
+
+  private async recordAiExcludeRecommendation(params: {
+    existing: InvestigationCaseEntity;
+    result: {
+      id: string;
+      matchingScore?: number | null;
+      aiScore?: number | null;
+      matchingReason?: string | null;
+    };
+    matchedRules: AiRuleMatch[];
+    job: SearchJob | null;
+  }): Promise<InvestigationCaseEntity> {
+    const { existing, result, matchedRules, job } = params;
+    const now = new Date();
+    const timeline = Array.isArray(existing.timeline) ? [...existing.timeline] : [];
+    const scorePct = Math.round(
+      this.computeAiScore({
+        aiScore: result.aiScore,
+        matchingScore: result.matchingScore,
+      }) * 100,
+    );
+    const ruleSummary = matchedRules.length
+      ? matchedRules
+          .map((rule) => rule.message || rule.code)
+          .filter(Boolean)
+          .join(' | ')
+      : null;
+    const orderNo = job?.orderNo?.trim() || existing.orderNo || null;
+
+    timeline.push(
+      this.tl(
+        'ai_exclude_recommendation',
+        now.toISOString(),
+        'AI 재평가 결과 제외 권고',
+        [result.matchingReason ? `AI Score ${scorePct}% · ${result.matchingReason}` : `AI Score ${scorePct}%`, ruleSummary]
+          .filter(Boolean)
+          .join(' | '),
+      ),
+    );
+
+    const entity = this.caseRepo.create({
+      ...existing,
+      searchJobId: job?.id ?? existing.searchJobId,
+      orderNo,
+      timeline,
     });
 
     return this.caseRepo.save(entity);

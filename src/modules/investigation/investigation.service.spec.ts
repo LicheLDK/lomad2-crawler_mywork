@@ -265,4 +265,87 @@ describe('InvestigationService autoCreateFromSearch', () => {
       cases[0].timeline.some((event) => event.title === 'AI 매칭 점수로 갱신'),
     ).toBe(false);
   });
+
+  it('keeps the case and records an exclude recommendation when AI score falls below the exclude rule', async () => {
+    const { service, cases } = createService();
+    const heuristicResult: SearchResultInput = {
+      id: 'listing-3',
+      title: '초기 휴리스틱 고득점 케이스',
+      siteCode: 'bungae',
+      url: 'https://example.com/listing-3',
+      titleSimilarity: 0.94,
+      imageSimilarity: 0.2,
+      price: '300000',
+    };
+    const aiResult: SearchResultInput = {
+      ...heuristicResult,
+      aiScore: 40,
+      matchingScore: 40,
+      matchingReason: 'AI가 다른 상품으로 판단',
+      matchingScores: {
+        brand: 20,
+        model: 10,
+        productName: 35,
+        image: 15,
+      },
+    };
+
+    await service.autoCreateFromSearch({
+      searchHistoryId: 'history-1',
+      results: [heuristicResult],
+    });
+    expect(cases).toHaveLength(1);
+    expect(cases[0].aiScore).toBeCloseTo(0.94);
+
+    const second = await service.autoCreateFromSearch({
+      searchHistoryId: 'history-1',
+      searchJobId: 'job-1',
+      results: [aiResult],
+    });
+
+    expect(second.created).toHaveLength(0);
+    expect(second.updated).toHaveLength(0);
+    expect(second.excluded).toBe(1);
+    expect(second.skipped).toBe(1);
+    expect(cases).toHaveLength(1);
+    expect(cases[0].aiScore).toBeCloseTo(0.94);
+    expect(cases[0].status).toBe('Open');
+    expect(
+      cases[0].timeline.some(
+        (event) => event.title === 'AI 재평가 결과 제외 권고',
+      ),
+    ).toBe(true);
+  });
+
+  it('does not create a new case when AI exclude fires and no case exists yet', async () => {
+    const { service, cases } = createService();
+    const aiOnlyLowScoreResult: SearchResultInput = {
+      id: 'listing-4',
+      title: 'AI 제외 대상',
+      siteCode: 'bungae',
+      url: 'https://example.com/listing-4',
+      aiScore: 35,
+      matchingScore: 35,
+      matchingReason: 'AI가 무관한 상품으로 판단',
+      matchingScores: {
+        brand: 10,
+        model: 5,
+        productName: 30,
+        image: 20,
+      },
+      price: '50000',
+    };
+
+    const result = await service.autoCreateFromSearch({
+      searchHistoryId: 'history-1',
+      searchJobId: 'job-1',
+      results: [aiOnlyLowScoreResult],
+    });
+
+    expect(result.created).toHaveLength(0);
+    expect(result.updated).toHaveLength(0);
+    expect(result.excluded).toBe(1);
+    expect(result.skipped).toBe(1);
+    expect(cases).toHaveLength(0);
+  });
 });
