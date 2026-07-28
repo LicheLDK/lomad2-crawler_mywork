@@ -1,5 +1,6 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Search } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
 import type { InvestigationCase, InvestigationStatus } from '../types';
 import { INVESTIGATION_STATUSES } from '../types';
 import { formatDateShort, siteLabel, siteTone } from '../../../lib/format';
@@ -19,12 +20,38 @@ const SITE_OPTIONS = [
  */
 export function CaseListPage() {
   const { cases, selectedId, openCase } = useInvestigation();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const statusFromUrl = searchParams.get('status');
+  const initialStatus =
+    statusFromUrl &&
+    (INVESTIGATION_STATUSES as string[]).includes(statusFromUrl)
+      ? (statusFromUrl as InvestigationStatus)
+      : '';
+
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<InvestigationStatus | ''>(
-    '',
+    initialStatus,
   );
   const [siteFilter, setSiteFilter] = useState('');
   const ignoreSelectUntil = useRef(0);
+
+  useEffect(() => {
+    const s = searchParams.get('status');
+    if (s && (INVESTIGATION_STATUSES as string[]).includes(s)) {
+      setStatusFilter(s as InvestigationStatus);
+    } else if (!s) {
+      setStatusFilter('');
+    }
+  }, [searchParams]);
+
+  function onStatusChange(value: InvestigationStatus | '') {
+    setStatusFilter(value);
+    if (value) {
+      setSearchParams({ status: value }, { replace: true });
+    } else {
+      setSearchParams({}, { replace: true });
+    }
+  }
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -51,7 +78,9 @@ export function CaseListPage() {
         <p className="text-xs uppercase tracking-[0.18em] text-ink-500">
           Investigation
         </p>
-        <h2 className="font-display text-2xl text-ink-900">Investigation</h2>
+        <h2 className="font-display text-2xl text-ink-900">
+          {statusFilter || 'All Cases'}
+        </h2>
         <p className="mt-1 max-w-xl text-sm text-ink-500">
           Case Management — 목록에서 Case를 열고 Drawer에서 조사합니다.
         </p>
@@ -74,14 +103,14 @@ export function CaseListPage() {
             <select
               value={statusFilter}
               onChange={(e) =>
-                setStatusFilter(e.target.value as InvestigationStatus | '')
+                onStatusChange(e.target.value as InvestigationStatus | '')
               }
               className="rounded-xl border border-ink-100 bg-sand-50/80 px-3 py-2 text-sm text-ink-700 outline-none focus:border-teal-600"
             >
               <option value="">상태 전체</option>
               {INVESTIGATION_STATUSES.map((s) => (
                 <option key={s} value={s}>
-                  {s}
+                  {s === 'Review' ? 'Reviewing' : s}
                 </option>
               ))}
             </select>

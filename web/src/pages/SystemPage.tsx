@@ -1,15 +1,21 @@
+import { useEffect } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import {
   Activity,
+  Bot,
   Cpu,
   Database,
+  FileText,
   HardDrive,
   Layers,
   Radio,
+  CalendarClock,
+  Network,
 } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
 import type { HealthPayload } from '../types';
 
-type ServiceStatus = 'ONLINE' | 'OFFLINE' | 'WARNING';
+type ServiceStatus = 'ONLINE' | 'OFFLINE' | 'WARNING' | 'READY';
 
 type StatusCardModel = {
   id: string;
@@ -27,6 +33,13 @@ function statusTone(status: ServiceStatus) {
         card: 'border-teal-600/25 bg-teal-50/40',
         icon: 'text-teal-700',
         dot: 'bg-teal-600',
+      };
+    case 'READY':
+      return {
+        badge: 'bg-sand-100 text-ink-600 ring-ink-100',
+        card: 'border-ink-100/80 bg-white/70',
+        icon: 'text-ink-500',
+        dot: 'bg-ink-300',
       };
     case 'WARNING':
       return {
@@ -106,6 +119,47 @@ function buildCards(health: HealthPayload | null): StatusCardModel[] {
       detail: queueDetail,
     },
     {
+      id: 'api',
+      label: 'API',
+      icon: Activity,
+      status: apiStatus,
+      detail: apiOnline
+        ? health?.status === 'error'
+          ? '일부 의존성 장애'
+          : 'Gateway 응답 정상'
+        : 'API에 연결할 수 없습니다.',
+    },
+    {
+      id: 'proxy',
+      label: 'Proxy',
+      icon: Network,
+      status: 'READY',
+      detail: '메뉴만 추가 · 프록시 설정 UI 준비중',
+    },
+    {
+      id: 'scheduler',
+      label: 'Scheduler',
+      icon: CalendarClock,
+      status: 'READY',
+      detail: '메뉴만 추가 · 스케줄러 UI 준비중',
+    },
+    {
+      id: 'ai',
+      label: 'AI Engine',
+      icon: Bot,
+      status: apiOnline ? 'ONLINE' : 'OFFLINE',
+      detail: apiOnline
+        ? 'API 경유 AI 기능 가용 (상세는 Prompt/Rules)'
+        : 'API 연결 필요',
+    },
+    {
+      id: 'prompt',
+      label: 'Prompt',
+      icon: FileText,
+      status: 'READY',
+      detail: '메뉴만 추가 · Prompt Manager UI 준비중',
+    },
+    {
       id: 'redis',
       label: 'Redis',
       icon: Radio,
@@ -135,27 +189,25 @@ function buildCards(health: HealthPayload | null): StatusCardModel[] {
           ? '검색 인덱스 정상'
           : 'Elasticsearch 응답 없음',
     },
-    {
-      id: 'api',
-      label: 'API',
-      icon: Activity,
-      status: apiStatus,
-      detail: apiOnline
-        ? health?.status === 'error'
-          ? '일부 의존성 장애'
-          : 'Gateway 응답 정상'
-        : 'API에 연결할 수 없습니다.',
-    },
   ];
 }
 
-function StatusCard({ card }: { card: StatusCardModel }) {
+function StatusCard({
+  card,
+  highlight,
+}: {
+  card: StatusCardModel;
+  highlight?: boolean;
+}) {
   const tone = statusTone(card.status);
   const Icon = card.icon;
 
   return (
     <article
-      className={`rounded-2xl border px-4 py-4 shadow-soft backdrop-blur transition ${tone.card}`}
+      id={`section-${card.id}`}
+      className={`scroll-mt-4 rounded-2xl border px-4 py-4 shadow-soft backdrop-blur transition ${tone.card} ${
+        highlight ? 'ring-2 ring-teal-600/40' : ''
+      }`}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-2.5">
@@ -175,7 +227,7 @@ function StatusCard({ card }: { card: StatusCardModel }) {
           className={`inline-flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-[11px] font-medium uppercase tracking-wide ring-1 ${tone.badge}`}
         >
           <span className={`h-1.5 w-1.5 rounded-full ${tone.dot}`} />
-          {card.status}
+          {card.status === 'READY' ? 'READY' : card.status}
         </span>
       </div>
     </article>
@@ -183,7 +235,14 @@ function StatusCard({ card }: { card: StatusCardModel }) {
 }
 
 export function SystemPage({ health }: { health: HealthPayload | null }) {
+  const [searchParams] = useSearchParams();
+  const section = searchParams.get('section') || 'worker';
   const cards = buildCards(health);
+
+  useEffect(() => {
+    const el = document.getElementById(`section-${section}`);
+    el?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, [section]);
 
   return (
     <div className="animate-fadeUp space-y-5">
@@ -191,15 +250,19 @@ export function SystemPage({ health }: { health: HealthPayload | null }) {
         <p className="text-xs uppercase tracking-[0.18em] text-ink-500">
           System
         </p>
-        <h2 className="font-display text-2xl text-ink-900">인프라 상태</h2>
+        <h2 className="font-display text-2xl text-ink-900">운영 관리</h2>
         <p className="mt-1 text-sm text-ink-500">
-          Worker · Queue · Redis · Postgres · Elastic · API
+          Worker · Queue · API · Proxy · Scheduler · AI Engine · Prompt
         </p>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {cards.map((card) => (
-          <StatusCard key={card.id} card={card} />
+          <StatusCard
+            key={card.id}
+            card={card}
+            highlight={section === card.id}
+          />
         ))}
       </div>
     </div>

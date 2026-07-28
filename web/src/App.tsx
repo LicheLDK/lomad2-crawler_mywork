@@ -13,17 +13,15 @@ import { SearchToolbar } from './components/SearchToolbar';
 import { SearchProgressPanel } from './components/SearchProgressPanel';
 import { RecentSearches } from './components/RecentSearches';
 import { ResultsPanel } from './components/ResultsPanel';
-import { DashboardSummary } from './components/DashboardSummary';
 import { AppShell } from './components/AppShell';
 import type { NavBadgeMap } from './components/AppSidebar';
 import { HistoryPage } from './pages/HistoryPage';
 import { RentalPage } from './pages/RentalPage';
 import { AnalyticsPage } from './pages/AnalyticsPage';
 import { SystemPage } from './pages/SystemPage';
-import { PlaceholderPage } from './pages/PlaceholderPage';
+import { OverviewPage } from './pages/OverviewPage';
 import {
   CaseListPage,
-  CaseSummaryCard,
 } from './features/investigation';
 import { pathMatches, type NavId } from './config/navigation';
 import {
@@ -55,7 +53,13 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [accordionOpen, setAccordionOpen] = useState<Partial<Record<NavId, boolean>>>(
     () => ({
-      search: pathMatches('/search', location.pathname),
+      search:
+        pathMatches('/search', location.pathname) ||
+        pathMatches('/history', location.pathname),
+      rental: pathMatches('/rental', location.pathname),
+      investigation: pathMatches('/investigation', location.pathname),
+      analytics: pathMatches('/analytics', location.pathname),
+      system: pathMatches('/system', location.pathname),
     }),
   );
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -102,12 +106,19 @@ export default function App() {
   );
 
   useEffect(() => {
-    if (pathMatches('/search', location.pathname)) {
-      setAccordionOpen((prev) => ({ ...prev, search: true }));
-    }
+    const path = location.pathname;
+    setAccordionOpen((prev) => ({
+      ...prev,
+      ...(pathMatches('/search', path) || pathMatches('/history', path)
+        ? { search: true }
+        : {}),
+      ...(pathMatches('/rental', path) ? { rental: true } : {}),
+      ...(pathMatches('/investigation', path) ? { investigation: true } : {}),
+      ...(pathMatches('/analytics', path) ? { analytics: true } : {}),
+      ...(pathMatches('/system', path) ? { system: true } : {}),
+    }));
     setMobileNavOpen(false);
   }, [location.pathname]);
-
   useEffect(() => {
     if (!mobileNavOpen) return;
     const prev = document.body.style.overflow;
@@ -218,6 +229,9 @@ export default function App() {
 
       const id = started.searchId;
       void refreshMeta();
+      if (location.pathname !== '/search') {
+        navigate('/search');
+      }
       if (
         'results' in started &&
         Array.isArray(started.results) &&
@@ -265,7 +279,7 @@ export default function App() {
   }
 
   function onSelectSearchFromHistory(id: string) {
-    navigate('/');
+    navigate('/search');
     void onSelectSearch(id);
   }
 
@@ -274,7 +288,7 @@ export default function App() {
   const queueCount = (queue?.waiting ?? 0) + (queue?.delayed ?? 0);
 
   const badges: NavBadgeMap = {
-    history: stats?.recentSearches?.length ?? 0,
+    search: stats?.recentSearches?.length ?? 0,
     system: (() => {
       const info = health?.info;
       let n = queue?.failed ?? 0;
@@ -328,6 +342,17 @@ export default function App() {
         <Route
           path="/"
           element={
+            <OverviewPage
+              stats={stats}
+              health={health}
+              activeId={detail?.searchId ?? activeSearchId}
+              onSelectSearch={onSelectSearchFromHistory}
+            />
+          }
+        />
+        <Route
+          path="/search"
+          element={
             <div className="flex h-full min-h-0 flex-col gap-4">
               <div className="shrink-0 space-y-3">
                 <SearchToolbar
@@ -357,19 +382,9 @@ export default function App() {
                   </div>
                   <div className="space-y-5">
                     <ResultsPanel detail={detail} busy={busy} />
-                    <DashboardSummary stats={stats} />
-                    <CaseSummaryCard />
                   </div>
                 </div>
               </div>
-            </div>
-          }
-        />
-        <Route
-          path="/search"
-          element={
-            <div className="h-full overflow-y-auto overscroll-contain">
-              <PlaceholderPage eyebrow="Search" title="상품 검색" />
             </div>
           }
         />

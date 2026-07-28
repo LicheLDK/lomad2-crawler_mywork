@@ -1,7 +1,6 @@
 import type { LucideIcon } from 'lucide-react';
 import {
   BarChart3,
-  History,
   LayoutDashboard,
   Package,
   Search,
@@ -17,7 +16,6 @@ export type NavId =
   | 'dashboard'
   | 'search'
   | 'rental'
-  | 'history'
   | 'investigation'
   | 'analytics'
   | 'system';
@@ -27,6 +25,7 @@ export type NavBadgeVariant = 'secondary' | 'destructive' | 'teal';
 export type NavChild = {
   id: string;
   label: string;
+  /** pathname 또는 pathname?query */
   path: string;
   disabled?: boolean;
   disabledHint?: string;
@@ -37,7 +36,7 @@ export type NavItem = {
   label: string;
   icon: LucideIcon;
   path: string;
-  /** Accordion 하위 메뉴 (Search 등) */
+  /** Accordion 하위 메뉴 */
   children?: NavChild[];
   /** Sidebar badge 키 — App에서 수치 주입 */
   badge?: NavBadgeVariant;
@@ -67,8 +66,16 @@ export const NAV_SECTIONS: NavSection[] = [
         label: 'Search',
         icon: Search,
         path: '/search',
+        badge: 'secondary',
         children: [
           { id: 'product', label: '상품 검색', path: '/search' },
+          {
+            id: 'image',
+            label: '이미지 검색',
+            path: '/search/image',
+            disabled: true,
+            disabledHint: '준비중',
+          },
           {
             id: 'scheduled',
             label: '예약 검색',
@@ -76,6 +83,7 @@ export const NAV_SECTIONS: NavSection[] = [
             disabled: true,
             disabledHint: '준비중',
           },
+          { id: 'history', label: '검색 이력', path: '/history' },
         ],
       },
       {
@@ -83,13 +91,19 @@ export const NAV_SECTIONS: NavSection[] = [
         label: 'Rental',
         icon: Package,
         path: '/rental',
-      },
-      {
-        id: 'history',
-        label: 'History',
-        icon: History,
-        path: '/history',
-        badge: 'secondary',
+        children: [
+          {
+            id: 'contracts',
+            label: '계약 목록',
+            path: '/rental?tab=contracts',
+          },
+          { id: 'auto', label: '자동 검색', path: '/rental?tab=auto' },
+          {
+            id: 'inv-history',
+            label: '조사 이력',
+            path: '/rental?tab=investigations',
+          },
+        ],
       },
       {
         id: 'investigation',
@@ -97,6 +111,28 @@ export const NAV_SECTIONS: NavSection[] = [
         icon: ShieldAlert,
         path: '/investigation',
         badge: 'teal',
+        children: [
+          {
+            id: 'open',
+            label: 'Open',
+            path: '/investigation?status=Open',
+          },
+          {
+            id: 'reviewing',
+            label: 'Reviewing',
+            path: '/investigation?status=Review',
+          },
+          {
+            id: 'completed',
+            label: 'Completed',
+            path: '/investigation?status=Completed',
+          },
+          {
+            id: 'archived',
+            label: 'Archived',
+            path: '/investigation?status=Archived',
+          },
+        ],
       },
     ],
   },
@@ -109,6 +145,28 @@ export const NAV_SECTIONS: NavSection[] = [
         label: 'Analytics',
         icon: BarChart3,
         path: '/analytics',
+        children: [
+          {
+            id: 'search-stats',
+            label: '검색 통계',
+            path: '/analytics?section=search',
+          },
+          {
+            id: 'site-stats',
+            label: '사이트별 통계',
+            path: '/analytics?section=sites',
+          },
+          {
+            id: 'ai-stats',
+            label: 'AI 분석 통계',
+            path: '/analytics?section=ai',
+          },
+          {
+            id: 'inv-stats',
+            label: 'Investigation 통계',
+            path: '/analytics?section=investigation',
+          },
+        ],
       },
     ],
   },
@@ -122,6 +180,19 @@ export const NAV_SECTIONS: NavSection[] = [
         icon: Settings,
         path: '/system',
         badge: 'destructive',
+        children: [
+          { id: 'worker', label: 'Worker', path: '/system?section=worker' },
+          { id: 'queue', label: 'Queue', path: '/system?section=queue' },
+          { id: 'api', label: 'API', path: '/system?section=api' },
+          { id: 'proxy', label: 'Proxy', path: '/system?section=proxy' },
+          {
+            id: 'scheduler',
+            label: 'Scheduler',
+            path: '/system?section=scheduler',
+          },
+          { id: 'ai-engine', label: 'AI Engine', path: '/system?section=ai' },
+          { id: 'prompt', label: 'Prompt', path: '/system?section=prompt' },
+        ],
       },
     ],
   },
@@ -136,5 +207,68 @@ export function findNavItem(id: NavId): NavItem | undefined {
 
 export function pathMatches(itemPath: string, pathname: string): boolean {
   if (itemPath === '/') return pathname === '/';
-  return pathname === itemPath || pathname.startsWith(`${itemPath}/`);
+  const base = itemPath.split('?')[0] || itemPath;
+  return pathname === base || pathname.startsWith(`${base}/`);
+}
+
+/** 하위 메뉴 활성: pathname + search 비교 */
+export function childPathActive(
+  childPath: string,
+  pathname: string,
+  search: string,
+): boolean {
+  const [pathPart, queryPart] = childPath.split('?');
+  const base = pathPart || childPath;
+  if (pathname !== base) return false;
+
+  const have = new URLSearchParams(
+    search.startsWith('?') ? search.slice(1) : search,
+  );
+
+  if (!queryPart) {
+    // 쿼리 없는 링크: 동일 path에서 다른 ?key= 형 형제와 겹치지 않을 때만
+    return true;
+  }
+
+  const want = new URLSearchParams(queryPart);
+  // 기본 탭: 쿼리 비어 있고 want가 해당 path의 첫 기본값인 경우
+  const empty = [...have.keys()].length === 0;
+  if (empty) {
+    // rental 기본 contracts, analytics 기본 search, system 기본 worker, investigation 기본 Open
+    const defaults: Record<string, string> = {
+      '/rental': 'tab=contracts',
+      '/analytics': 'section=search',
+      '/system': 'section=worker',
+      '/investigation': 'status=Open',
+    };
+    const def = defaults[base];
+    if (def && queryPart === def) return true;
+    return false;
+  }
+
+  for (const [k, v] of want.entries()) {
+    if (have.get(k) !== v) return false;
+  }
+  return true;
+}
+
+/** breadcrumb / 헤더용 — 현재 path에 맞는 NavItem */
+export function findNavByLocation(
+  pathname: string,
+): { item: NavItem; child?: NavChild } | null {
+  for (const item of NAV_ITEMS) {
+    if (item.children?.length) {
+      for (const child of item.children) {
+        if (child.disabled) continue;
+        const childBase = child.path.split('?')[0];
+        if (pathname === childBase || pathname.startsWith(`${childBase}/`)) {
+          return { item, child };
+        }
+      }
+      if (pathMatches(item.path, pathname)) return { item };
+    } else if (pathMatches(item.path, pathname)) {
+      return { item };
+    }
+  }
+  return null;
 }

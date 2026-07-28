@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { api } from '../api';
 import { siteLabel } from '../lib/format';
 import {
@@ -93,6 +94,13 @@ export function RentalPage({
 }: {
   onSelectSearch?: (searchHistoryId: string) => void;
 }) {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get('tab');
+  const tab =
+    tabParam === 'auto' || tabParam === 'investigations'
+      ? tabParam
+      : 'contracts';
+
   const [jobs, setJobs] = useState<RentalJobSummary[]>([]);
   const [loadingList, setLoadingList] = useState(true);
   const [listError, setListError] = useState<string | null>(null);
@@ -106,6 +114,10 @@ export function RentalPage({
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [live, setLive] = useState<JobLive | null>(null);
+
+  function setTab(next: 'contracts' | 'auto' | 'investigations') {
+    setSearchParams({ tab: next }, { replace: true });
+  }
 
   const loadJobs = useCallback(async () => {
     setLoadingList(true);
@@ -229,19 +241,53 @@ export function RentalPage({
     <div className="flex h-full min-h-0 flex-col gap-4 animate-fadeUp">
       <section className="shrink-0 rounded-2xl border border-ink-100/80 bg-white/75 p-4 shadow-soft backdrop-blur sm:p-5">
         <p className="text-xs uppercase tracking-[0.16em] text-ink-500">
-          Rental · Search Service
+          Rental · 계약 관리
         </p>
-        <h2 className="font-display text-xl text-ink-900">Search Jobs</h2>
+        <h2 className="font-display text-xl text-ink-900">
+          {tab === 'contracts'
+            ? '계약 목록'
+            : tab === 'auto'
+              ? '자동 검색'
+              : '조사 이력'}
+        </h2>
         <p className="mt-1 text-sm text-ink-500">
           BackOffice가 Master입니다. 주문정보는 Rental API로 조회하고, 여기서는
           Job Status를 실시간으로 표시합니다.
         </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {(
+            [
+              ['contracts', '계약 목록'],
+              ['auto', '자동 검색'],
+              ['investigations', '조사 이력'],
+            ] as const
+          ).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setTab(id)}
+              className={`rounded-lg px-3 py-1.5 text-sm transition ${
+                tab === id
+                  ? 'bg-ink-900 text-sand-50'
+                  : 'bg-sand-100 text-ink-700 hover:bg-sand-200'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </section>
 
       <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[300px_minmax(0,1fr)] xl:grid-cols-[320px_minmax(0,1fr)]">
         <section className="flex min-h-0 flex-col rounded-2xl border border-ink-100/80 bg-white/75 shadow-soft backdrop-blur">
           <div className="shrink-0 border-b border-ink-100/80 px-4 py-3">
-            <h3 className="text-sm font-medium text-ink-900">최근 Search Job</h3>
+            <h3 className="text-sm font-medium text-ink-900">
+              {tab === 'auto'
+                ? '자동 검색 Job'
+                : tab === 'investigations'
+                  ? 'Job 선택'
+                  : '최근 Search Job'}
+            </h3>
             <p className="text-xs text-ink-500">{jobs.length}건</p>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2">
@@ -312,7 +358,49 @@ export function RentalPage({
         </section>
 
         <section className="min-h-0 overflow-y-auto overscroll-contain rounded-2xl border border-ink-100/80 bg-white/75 p-4 shadow-soft backdrop-blur sm:p-5">
-          {!selectedJobId ? (
+          {tab === 'investigations' ? (
+            <div className="space-y-4">
+              <h3 className="text-sm font-medium text-ink-900">
+                조사 이력 (Job 연결)
+              </h3>
+              {!selectedJobId ? (
+                <p className="py-8 text-sm text-ink-500">
+                  왼쪽에서 Job을 선택하세요.
+                </p>
+              ) : investigations.length === 0 ? (
+                <p className="text-sm text-ink-500">
+                  연결된 Investigation이 없습니다.
+                </p>
+              ) : (
+                <ul className="space-y-2">
+                  {investigations.map((inv) => (
+                    <li
+                      key={inv.id}
+                      className="rounded-xl border border-ink-100 bg-sand-50/50 px-3 py-2.5"
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div>
+                          <p className="font-mono text-xs text-ink-500">
+                            {inv.caseNo}
+                          </p>
+                          <p className="text-sm text-ink-900">
+                            {inv.listingTitle || inv.productName}
+                          </p>
+                        </div>
+                        <span className="rounded-md bg-teal-50 px-1.5 py-0.5 text-[11px] tabular-nums text-teal-800">
+                          AI {inv.aiScorePercent}%
+                        </span>
+                      </div>
+                      <p className="mt-1 text-[11px] text-ink-400">
+                        {siteLabel(inv.siteCode)} · {inv.status} ·{' '}
+                        {formatWhen(inv.createdAt)}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          ) : !selectedJobId ? (
             <p className="py-16 text-center text-sm text-ink-500">
               왼쪽에서 Job을 선택하세요.
             </p>
@@ -326,6 +414,7 @@ export function RentalPage({
             </p>
           ) : (
             <div className="space-y-6">
+              {(tab === 'contracts' || tab === 'auto') && (
               <div>
                 <p className="text-xs uppercase tracking-[0.14em] text-ink-500">
                   Job Status
@@ -359,7 +448,9 @@ export function RentalPage({
                   </div>
                 </div>
               </div>
+              )}
 
+              {tab === 'contracts' && (
               <div>
                 <p className="text-xs uppercase tracking-[0.14em] text-ink-500">
                   주문정보 (Rental API)
@@ -390,7 +481,9 @@ export function RentalPage({
                   </p>
                 )}
               </div>
+              )}
 
+              {tab === 'auto' && (
               <div>
                 <h4 className="text-sm font-medium text-ink-900">
                   Search History
@@ -433,7 +526,9 @@ export function RentalPage({
                   </ul>
                 )}
               </div>
+              )}
 
+              {tab === 'contracts' && (
               <div>
                 <h4 className="text-sm font-medium text-ink-900">
                   Investigation (Job 연결)
@@ -471,6 +566,7 @@ export function RentalPage({
                   </ul>
                 )}
               </div>
+              )}
             </div>
           )}
         </section>

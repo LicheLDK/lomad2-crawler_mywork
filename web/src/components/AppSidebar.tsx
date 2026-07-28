@@ -3,6 +3,7 @@ import { NavLink, useLocation } from 'react-router-dom';
 import { Badge } from './ui/badge';
 import {
   NAV_SECTIONS,
+  childPathActive,
   pathMatches,
   type NavBadgeVariant,
   type NavId,
@@ -126,7 +127,8 @@ function AccordionItem({
           <ul className="ml-4 mt-1 space-y-0.5 border-l border-ink-100/80 pl-2">
             {children.map((sub) => {
               const subActive =
-                !sub.disabled && location.pathname === sub.path;
+                !sub.disabled &&
+                childPathActive(sub.path, location.pathname, location.search);
               return (
                 <li key={sub.id}>
                   {sub.disabled ? (
@@ -137,7 +139,7 @@ function AccordionItem({
                     >
                       <span>{sub.label}</span>
                       {sub.disabledHint ? (
-                        <span className="shrink-0 text-[10px] tracking-wide text-ink-300">
+                        <span className="shrink-0 rounded bg-sand-100 px-1.5 py-0.5 text-[10px] tracking-wide text-ink-400">
                           {sub.disabledHint}
                         </span>
                       ) : null}
@@ -160,8 +162,7 @@ function AccordionItem({
                   )}
                 </li>
               );
-            })}
-          </ul>
+            })}          </ul>
         </div>
       </div>
     </div>

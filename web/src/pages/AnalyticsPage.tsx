@@ -1,4 +1,5 @@
-import { useMemo, type ReactNode } from 'react';
+import { useEffect, useMemo, type ReactNode } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Bar,
   BarChart,
@@ -44,6 +45,22 @@ function formatDay(day: string) {
 }
 
 export function AnalyticsPage({ stats }: { stats: StatsOverview | null }) {
+  const [searchParams] = useSearchParams();
+  const section = searchParams.get('section') || 'search';
+
+  useEffect(() => {
+    const id =
+      section === 'sites'
+        ? 'section-sites'
+        : section === 'ai'
+          ? 'section-ai'
+          : section === 'investigation'
+            ? 'section-investigation'
+            : 'section-search';
+    const el = document.getElementById(id);
+    el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [section]);
+
   const siteData = useMemo(
     () =>
       (stats?.bySite ?? []).map((row) => ({
@@ -81,6 +98,9 @@ export function AnalyticsPage({ stats }: { stats: StatsOverview | null }) {
     );
   }
 
+  const highlight = (id: string) =>
+    section === id ? 'ring-2 ring-teal-600/40' : '';
+
   return (
     <div className="animate-fadeUp space-y-5">
       <div>
@@ -88,104 +108,145 @@ export function AnalyticsPage({ stats }: { stats: StatsOverview | null }) {
           Analytics
         </p>
         <h2 className="font-display text-2xl text-ink-900">운영 통계</h2>
+        <p className="mt-1 text-sm text-ink-500">
+          Dashboard는 요약만 · 상세는 이 화면에서 조회합니다.
+        </p>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <MetricCard label="검색 수" value={stats.totals.searches} />
-        <MetricCard label="검색 결과" value={stats.totals.results} />
-        <MetricCard
-          label="오늘 검색"
-          value={stats.last24h.searches}
-          hint="최근 24시간"
-        />
-        <MetricCard
-          label="오늘 결과"
-          value={stats.last24h.results}
-          hint="최근 24시간"
-        />
+      <div
+        id="section-search"
+        className={`scroll-mt-4 rounded-2xl ${highlight('search')}`}
+      >
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <MetricCard label="검색 수" value={stats.totals.searches} />
+          <MetricCard label="검색 결과" value={stats.totals.results} />
+          <MetricCard
+            label="오늘 검색"
+            value={stats.last24h.searches}
+            hint="최근 24시간"
+          />
+          <MetricCard
+            label="오늘 결과"
+            value={stats.last24h.results}
+            hint="최근 24시간"
+          />
+        </div>
       </div>
 
       <div className="grid gap-5 lg:grid-cols-2">
-        <Panel eyebrow="Sites" title="사이트별 통계">
-          {siteData.length === 0 ? (
-            <p className="text-sm text-ink-500">아직 저장된 결과가 없습니다.</p>
-          ) : (
-            <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={siteData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                  <CartesianGrid stroke={SAND} strokeDasharray="3 3" vertical={false} />
-                  <XAxis
-                    dataKey="name"
-                    tick={{ fill: MUTED, fontSize: 12 }}
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <YAxis
-                    allowDecimals={false}
-                    tick={{ fill: MUTED, fontSize: 12 }}
-                    axisLine={false}
-                    tickLine={false}
-                    width={36}
-                  />
-                  <Tooltip
-                    cursor={{ fill: 'rgba(15, 118, 110, 0.06)' }}
-                    contentStyle={{
-                      borderRadius: 12,
-                      border: '1px solid #e2e8f0',
-                      fontSize: 13,
-                    }}
-                  />
-                  <Bar dataKey="count" name="결과" fill={TEAL} radius={[8, 8, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-        </Panel>
+        <div
+          id="section-sites"
+          className={`scroll-mt-4 rounded-2xl ${highlight('sites')}`}
+        >
+          <Panel eyebrow="Sites" title="사이트별 통계">
+            {siteData.length === 0 ? (
+              <p className="text-sm text-ink-500">아직 저장된 결과가 없습니다.</p>
+            ) : (
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={siteData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                    <CartesianGrid stroke={SAND} strokeDasharray="3 3" vertical={false} />
+                    <XAxis
+                      dataKey="name"
+                      tick={{ fill: MUTED, fontSize: 12 }}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <YAxis
+                      allowDecimals={false}
+                      tick={{ fill: MUTED, fontSize: 12 }}
+                      axisLine={false}
+                      tickLine={false}
+                      width={36}
+                    />
+                    <Tooltip
+                      cursor={{ fill: 'rgba(15, 118, 110, 0.06)' }}
+                      contentStyle={{
+                        borderRadius: 12,
+                        border: '1px solid #e2e8f0',
+                        fontSize: 13,
+                      }}
+                    />
+                    <Bar dataKey="count" name="결과" fill={TEAL} radius={[8, 8, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </Panel>
+        </div>
 
-        <Panel eyebrow="Keywords" title="인기 키워드">
-          {keywordData.length === 0 ? (
-            <p className="text-sm text-ink-500">인기 키워드가 없습니다.</p>
-          ) : (
-            <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={keywordData}
-                  layout="vertical"
-                  margin={{ top: 8, right: 16, left: 8, bottom: 0 }}
-                >
-                  <CartesianGrid stroke={SAND} strokeDasharray="3 3" horizontal={false} />
-                  <XAxis
-                    type="number"
-                    allowDecimals={false}
-                    tick={{ fill: MUTED, fontSize: 12 }}
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <YAxis
-                    type="category"
-                    dataKey="name"
-                    width={88}
-                    tick={{ fill: INK, fontSize: 12 }}
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <Tooltip
-                    formatter={(value) => [Number(value ?? 0), '검색']}
-                    labelFormatter={(_, payload) =>
-                      (payload?.[0]?.payload as { full?: string } | undefined)
-                        ?.full ?? ''
-                    }
-                    contentStyle={{
-                      borderRadius: 12,
-                      border: '1px solid #e2e8f0',
-                      fontSize: 13,
-                    }}
-                  />
-                  <Bar dataKey="count" name="검색" fill={INK} radius={[0, 8, 8, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          )}
+        <div
+          id="section-ai"
+          className={`scroll-mt-4 rounded-2xl ${highlight('ai')}`}
+        >
+          <Panel eyebrow="AI" title="AI 분석 통계">
+            <p className="mb-3 text-sm text-ink-500">
+              키워드·검색 추세 기반 요약 (기존 통계 데이터 재사용 · 별도 API 없음)
+            </p>
+            {keywordData.length === 0 ? (
+              <p className="text-sm text-ink-500">인기 키워드가 없습니다.</p>
+            ) : (
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={keywordData}
+                    layout="vertical"
+                    margin={{ top: 8, right: 16, left: 8, bottom: 0 }}
+                  >
+                    <CartesianGrid stroke={SAND} strokeDasharray="3 3" horizontal={false} />
+                    <XAxis
+                      type="number"
+                      allowDecimals={false}
+                      tick={{ fill: MUTED, fontSize: 12 }}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <YAxis
+                      type="category"
+                      dataKey="name"
+                      width={88}
+                      tick={{ fill: INK, fontSize: 12 }}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <Tooltip
+                      formatter={(value) => [Number(value ?? 0), '검색']}
+                      labelFormatter={(_, payload) =>
+                        (payload?.[0]?.payload as { full?: string } | undefined)
+                          ?.full ?? ''
+                      }
+                      contentStyle={{
+                        borderRadius: 12,
+                        border: '1px solid #e2e8f0',
+                        fontSize: 13,
+                      }}
+                    />
+                    <Bar dataKey="count" name="검색" fill={INK} radius={[0, 8, 8, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </Panel>
+        </div>
+      </div>
+
+      <div
+        id="section-investigation"
+        className={`scroll-mt-4 rounded-2xl ${highlight('investigation')}`}
+      >
+        <Panel eyebrow="Investigation" title="Investigation 통계">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <MetricCard label="검색 결과(전체)" value={stats.totals.results} />
+            <MetricCard label="오늘 결과" value={stats.last24h.results} />
+            <MetricCard
+              label="Queue waiting"
+              value={stats.queue?.waiting ?? 0}
+              hint="조사 파이프라인 부하 참고"
+            />
+          </div>
+          <p className="mt-3 text-sm text-ink-500">
+            Case 상세 집계는 Investigation 메뉴에서 확인합니다.
+          </p>
         </Panel>
       </div>
 
