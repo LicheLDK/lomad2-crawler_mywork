@@ -38,6 +38,11 @@ export default [
     rules: {
       ...toWarn(tsPlugin.configs.recommended.rules),
       ...toWarn(reactHooks.configs.recommended.rules),
+      'no-unused-vars': 'off',
+      '@typescript-eslint/no-unused-vars': [
+        'warn',
+        { argsIgnorePattern: '^_' },
+      ],
       'react-refresh/only-export-components': [
         'warn',
         { allowConstantExport: true },
