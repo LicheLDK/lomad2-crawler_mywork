@@ -198,13 +198,6 @@ export const NAV_SECTIONS: NavSection[] = [
   },
 ];
 
-/** 플랫 목록 (배지·활성 판별용) */
-export const NAV_ITEMS: NavItem[] = NAV_SECTIONS.flatMap((s) => s.items);
-
-export function findNavItem(id: NavId): NavItem | undefined {
-  return NAV_ITEMS.find((i) => i.id === id);
-}
-
 export function pathMatches(itemPath: string, pathname: string): boolean {
   if (itemPath === '/') return pathname === '/';
   const base = itemPath.split('?')[0] || itemPath;
@@ -252,23 +245,3 @@ export function childPathActive(
   return true;
 }
 
-/** breadcrumb / 헤더용 — 현재 path에 맞는 NavItem */
-export function findNavByLocation(
-  pathname: string,
-): { item: NavItem; child?: NavChild } | null {
-  for (const item of NAV_ITEMS) {
-    if (item.children?.length) {
-      for (const child of item.children) {
-        if (child.disabled) continue;
-        const childBase = child.path.split('?')[0];
-        if (pathname === childBase || pathname.startsWith(`${childBase}/`)) {
-          return { item, child };
-        }
-      }
-      if (pathMatches(item.path, pathname)) return { item };
-    } else if (pathMatches(item.path, pathname)) {
-      return { item };
-    }
-  }
-  return null;
-}
