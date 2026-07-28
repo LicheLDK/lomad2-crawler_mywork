@@ -101,7 +101,7 @@ export function OverviewPage({
             <div className="mt-3 flex flex-wrap gap-2">
               <QuickLink to="/search" label="상품 검색" />
               <QuickLink to="/rental" label="Rental Jobs" />
-              <QuickLink to="/investigation" label="Investigation" />
+              <QuickLink to="/investigation?status=Open" label="Investigation" />
               <QuickLink to="/analytics" label="Analytics" />
             </div>
           </section>

@@ -15,6 +15,12 @@ const SITE_OPTIONS = [
   { value: 'karrot', label: '당근' },
 ];
 
+const DEFAULT_STATUS: InvestigationStatus = 'Open';
+
+function isValidStatus(value: string | null): value is InvestigationStatus {
+  return value != null && (INVESTIGATION_STATUSES as string[]).includes(value);
+}
+
 /**
  * Case List — 목록만 담당. Detail은 전역 CaseDrawer.
  */
@@ -22,11 +28,7 @@ export function CaseListPage() {
   const { cases, selectedId, openCase } = useInvestigation();
   const [searchParams, setSearchParams] = useSearchParams();
   const statusFromUrl = searchParams.get('status');
-  const initialStatus =
-    statusFromUrl &&
-    (INVESTIGATION_STATUSES as string[]).includes(statusFromUrl)
-      ? (statusFromUrl as InvestigationStatus)
-      : '';
+  const initialStatus = isValidStatus(statusFromUrl) ? statusFromUrl : DEFAULT_STATUS;
 
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<InvestigationStatus | ''>(
@@ -37,20 +39,18 @@ export function CaseListPage() {
 
   useEffect(() => {
     const s = searchParams.get('status');
-    if (s && (INVESTIGATION_STATUSES as string[]).includes(s)) {
-      setStatusFilter(s as InvestigationStatus);
-    } else if (!s) {
-      setStatusFilter('');
+    if (isValidStatus(s)) {
+      setStatusFilter(s);
+      return;
     }
-  }, [searchParams]);
+    setStatusFilter(DEFAULT_STATUS);
+    setSearchParams({ status: DEFAULT_STATUS }, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   function onStatusChange(value: InvestigationStatus | '') {
-    setStatusFilter(value);
-    if (value) {
-      setSearchParams({ status: value }, { replace: true });
-    } else {
-      setSearchParams({}, { replace: true });
-    }
+    const next = value || DEFAULT_STATUS;
+    setStatusFilter(next);
+    setSearchParams({ status: next }, { replace: true });
   }
 
   const filtered = useMemo(() => {

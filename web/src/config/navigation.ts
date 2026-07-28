@@ -27,6 +27,7 @@ export type NavChild = {
   label: string;
   /** pathname 또는 pathname?query */
   path: string;
+  isDefault?: boolean;
   disabled?: boolean;
   disabledHint?: string;
 };
@@ -68,7 +69,7 @@ export const NAV_SECTIONS: NavSection[] = [
         path: '/search',
         badge: 'secondary',
         children: [
-          { id: 'product', label: '상품 검색', path: '/search' },
+          { id: 'product', label: '상품 검색', path: '/search', isDefault: true },
           {
             id: 'image',
             label: '이미지 검색',
@@ -96,6 +97,7 @@ export const NAV_SECTIONS: NavSection[] = [
             id: 'contracts',
             label: '계약 목록',
             path: '/rental?tab=contracts',
+            isDefault: true,
           },
           { id: 'auto', label: '자동 검색', path: '/rental?tab=auto' },
           {
@@ -116,6 +118,7 @@ export const NAV_SECTIONS: NavSection[] = [
             id: 'open',
             label: 'Open',
             path: '/investigation?status=Open',
+            isDefault: true,
           },
           {
             id: 'reviewing',
@@ -150,6 +153,7 @@ export const NAV_SECTIONS: NavSection[] = [
             id: 'search-stats',
             label: '검색 통계',
             path: '/analytics?section=search',
+            isDefault: true,
           },
           {
             id: 'site-stats',
@@ -181,7 +185,12 @@ export const NAV_SECTIONS: NavSection[] = [
         path: '/system',
         badge: 'destructive',
         children: [
-          { id: 'worker', label: 'Worker', path: '/system?section=worker' },
+          {
+            id: 'worker',
+            label: 'Worker',
+            path: '/system?section=worker',
+            isDefault: true,
+          },
           { id: 'queue', label: 'Queue', path: '/system?section=queue' },
           { id: 'api', label: 'API', path: '/system?section=api' },
           { id: 'proxy', label: 'Proxy', path: '/system?section=proxy' },
@@ -227,16 +236,14 @@ export function childPathActive(
   // 기본 탭: 쿼리 비어 있고 want가 해당 path의 첫 기본값인 경우
   const empty = [...have.keys()].length === 0;
   if (empty) {
-    // rental 기본 contracts, analytics 기본 search, system 기본 worker, investigation 기본 Open
-    const defaults: Record<string, string> = {
-      '/rental': 'tab=contracts',
-      '/analytics': 'section=search',
-      '/system': 'section=worker',
-      '/investigation': 'status=Open',
-    };
-    const def = defaults[base];
-    if (def && queryPart === def) return true;
-    return false;
+    return NAV_SECTIONS.some((section) =>
+      section.items.some((item) =>
+        item.children?.some(
+          (child) =>
+            child.path === childPath && child.isDefault === true && child.path.startsWith(base),
+        ) ?? false,
+      ),
+    );
   }
 
   for (const [k, v] of want.entries()) {
