@@ -18,9 +18,15 @@ jobs:
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            web/package-lock.json
 
       - name: Install backend dependencies
         run: npm ci
+
+      - name: Install frontend dependencies
+        run: npm --prefix web ci
 
       - name: Run lint
         run: |
@@ -32,9 +38,6 @@ jobs:
 
       - name: Run backend tests
         run: npx jest --runInBand
-
-      - name: Install frontend dependencies
-        run: npm --prefix web ci
 
       - name: Build frontend
         run: npm --prefix web run build
