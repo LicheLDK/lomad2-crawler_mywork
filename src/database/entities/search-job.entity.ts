@@ -66,19 +66,19 @@ export class SearchJob {
   @Column({ type: 'varchar', length: 255, nullable: true })
   productName!: string | null;
 
-  /** @deprecated 신규 Job 은 null — 키워드는 keywords[] 에만 반영 */
+  /** 브랜드 스냅샷 (고객정보 아님, 매칭 입력 재현용) */
   @Column({ type: 'varchar', length: 100, nullable: true })
   brand!: string | null;
 
-  /** @deprecated */
+  /** 모델명 스냅샷 (고객정보 아님, 매칭 입력 재현용) */
   @Column({ type: 'varchar', length: 100, nullable: true })
   modelName!: string | null;
 
-  /** @deprecated */
+  /** 옵션 스냅샷 (고객정보 아님, 매칭 입력 재현용) */
   @Column({ type: 'varchar', length: 100, nullable: true })
   option!: string | null;
 
-  /** @deprecated */
+  /** 색상 스냅샷 (고객정보 아님, 매칭 입력 재현용) */
   @Column({ type: 'varchar', length: 100, nullable: true })
   color!: string | null;
 

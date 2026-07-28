@@ -62,14 +62,14 @@ export class SearchJobService {
     const job = await this.jobRepo.save(
       this.jobRepo.create({
         orderNo,
-        // 주문 마스터 복제 금지
+        // 고객 개인정보는 영속화하지 않는다.
         contractNo: null,
         customerName: null,
-        brand: null,
-        modelName: null,
-        option: null,
-        color: null,
         // 검색 실행 스냅샷
+        brand: searchInput.brand ?? null,
+        modelName: searchInput.modelName ?? null,
+        option: searchInput.option ?? null,
+        color: searchInput.color ?? null,
         productNo: searchInput.externalProductId || null,
         productName: searchInput.productName,
         keywords,
@@ -446,14 +446,7 @@ export class SearchJobService {
       if (job && this.aiService.canMatch() && results.length > 0) {
         try {
           const matches = await this.aiService.matchSearchResults({
-            rental: {
-              brand: job.brand,
-              productName: job.productName,
-              modelName: job.modelName,
-              option: job.option,
-              color: job.color,
-              imageUrl: job.referenceImageUrl,
-            },
+            rental: this.toMatchingRentalSnapshot(job),
             listings: results.map((r) => ({
               id: r.id,
               title: r.title,
@@ -585,6 +578,17 @@ export class SearchJobService {
       /** 실행 스냅샷 (마스터 아님) */
       productNameSnapshot: job.productName,
       productNoSnapshot: job.productNo,
+    };
+  }
+
+  private toMatchingRentalSnapshot(job: SearchJob) {
+    return {
+      brand: job.brand ?? null,
+      productName: job.productName ?? null,
+      modelName: job.modelName ?? null,
+      option: job.option ?? null,
+      color: job.color ?? null,
+      imageUrl: job.referenceImageUrl ?? null,
     };
   }
 }
