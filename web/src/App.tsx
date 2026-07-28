@@ -20,6 +20,7 @@ import { RentalPage } from './pages/RentalPage';
 import { AnalyticsPage } from './pages/AnalyticsPage';
 import { SystemPage } from './pages/SystemPage';
 import { OverviewPage } from './pages/OverviewPage';
+import { PlaceholderPage } from './pages/PlaceholderPage';
 import {
   CaseListPage,
 } from './features/investigation';
@@ -387,6 +388,14 @@ export default function App() {
               </div>
             </div>
           }
+        />
+        <Route
+          path="/search/image"
+          element={<PlaceholderPage eyebrow="Search" title="이미지 검색 준비중" />}
+        />
+        <Route
+          path="/search/scheduled"
+          element={<PlaceholderPage eyebrow="Search" title="예약 검색 준비중" />}
         />
         <Route
           path="/rental"
