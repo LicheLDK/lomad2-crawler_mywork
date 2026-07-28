@@ -12,7 +12,8 @@
     "start:prod": "node -r ./dist/register-paths.js dist/main.js",
     "start:worker": "node -r ./dist/register-paths.js dist/worker.js",
     "start:worker:dev": "cross-env ENABLE_WORKER=true ts-node -r tsconfig-paths/register src/worker.ts",
-    "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
+    "lint": "eslint .",
+    "lint:ci": "eslint . --max-warnings 14",
     "test": "jest",
     "test:migration": "powershell -ExecutionPolicy Bypass -File scripts/test-migration-empty-volume.ps1",
     "typeorm": "typeorm-ts-node-commonjs",
@@ -26,6 +27,8 @@
     "backup": "powershell -ExecutionPolicy Bypass -File scripts/backup-source.ps1",
     "infra:up": "docker compose up -d postgres redis elastic",
     "infra:down": "docker compose stop postgres redis elastic",
+    "web:lint": "npm --prefix web run lint",
+    "web:lint:ci": "npm --prefix web run lint -- --max-warnings 49",
     "web:dev": "npm --prefix web run dev",
     "web:build": "npm --prefix web run build",
     "web:build:check": "npm --prefix web install && npm --prefix web run build",
@@ -70,6 +73,7 @@
     "uuid": "^11.1.0"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.5",
     "@nestjs/cli": "^11.0.5",
     "@nestjs/schematics": "^11.0.2",
     "@nestjs/testing": "^11.0.11",
@@ -77,8 +81,11 @@
     "@types/jest": "^29.5.14",
     "@types/node": "^22.13.5",
     "@types/uuid": "^10.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.65.0",
+    "@typescript-eslint/parser": "^8.65.0",
     "concurrently": "^10.0.3",
     "cross-env": "^10.1.0",
+    "eslint": "^9.39.5",
     "jest": "^29.7.0",
     "ts-jest": "^29.2.6",
     "ts-node": "^10.9.2",
@@ -86,13 +93,19 @@
     "typescript": "^5.7.3"
   },
   "jest": {
-    "moduleFileExtensions": ["js", "json", "ts"],
+    "moduleFileExtensions": [
+      "js",
+      "json",
+      "ts"
+    ],
     "rootDir": "src",
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {
       "^.+\\.(t|j)s$": "ts-jest"
     },
-    "collectCoverageFrom": ["**/*.(t|j)s"],
+    "collectCoverageFrom": [
+      "**/*.(t|j)s"
+    ],
     "coverageDirectory": "../coverage",
     "testEnvironment": "node",
     "moduleNameMapper": {
