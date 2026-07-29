@@ -18,29 +18,29 @@ export const FINAL_DECISION_OPTIONS: {
 }[] = [
   {
     value: 'resale_confirmed',
-    label: '??? ??',
-    description: '?? ???? ?????.',
+    label: '재판매 확인',
+    description: '무단 재판매로 판정합니다.',
     Icon: ShieldAlert,
     tone: 'rose',
   },
   {
     value: 'further_investigation',
-    label: '?? ??',
-    description: '?? ??? ???? Case? ?? ?????.',
+    label: '추가 조사',
+    description: '추가 조사가 필요하나 Case는 완료 처리합니다.',
     Icon: Search,
     tone: 'amber',
   },
   {
     value: 'false_positive',
-    label: '??',
-    description: 'AI/?? ??? ???? ?????.',
+    label: '오탐',
+    description: 'AI/검색 결과가 오탐으로 판정합니다.',
     Icon: Ban,
     tone: 'ink',
   },
   {
     value: 'excluded',
-    label: '??',
-    description: '?? ???? ?????.',
+    label: '제외',
+    description: '조사 대상에서 제외합니다.',
     Icon: CheckCircle2,
     tone: 'teal',
   },
@@ -48,7 +48,7 @@ export const FINAL_DECISION_OPTIONS: {
 
 export function finalDecisionLabel(value: FinalDecision | null | undefined) {
   return (
-    FINAL_DECISION_OPTIONS.find((o) => o.value === value)?.label ?? value ?? '�'
+    FINAL_DECISION_OPTIONS.find((o) => o.value === value)?.label ?? value ?? '—'
   );
 }
 
@@ -75,10 +75,10 @@ export function InvestigationFinalDecisionPanel({
     setBusy(true);
     try {
       await applyFinalDecision(row.id, pending);
-      toast(`?? ??? ?????? � ${finalDecisionLabel(pending)}`);
+      toast(`최종 판정을 적용했습니다 · ${finalDecisionLabel(pending)}`);
       setPending(null);
     } catch (e) {
-      toast(formatApiError(e, '?? ?? ??? ??????.'));
+      toast(formatApiError(e, '최종 판정 적용에 실패했습니다.'));
     } finally {
       setBusy(false);
     }
@@ -102,7 +102,7 @@ export function InvestigationFinalDecisionPanel({
               {finalDecisionLabel(row.finalDecision)}
             </p>
             <p className="text-xs text-ink-500">
-              ??? � {formatTime(row.decidedAt)}
+              판정일 · {formatTime(row.decidedAt)}
             </p>
           </div>
         ) : (
@@ -129,21 +129,21 @@ export function InvestigationFinalDecisionPanel({
 
         {locked && !row.finalDecision ? (
           <p className="mt-3 text-xs text-ink-500">
-            Completed / Archived ???? ?? ??? ??? ? ????.
+            Completed / Archived 상태에서는 최종 판정을 적용할 수 없습니다.
           </p>
         ) : null}
       </div>
 
       <ConfirmDialog
         open={pending != null}
-        title="?? ?? ??"
+        title="최종 판정 확인"
         description={
           pendingOption
-            ? `'${pendingOption.label}' � ${pendingOption.description} Case? Completed? ?????.`
+            ? `'${pendingOption.label}' — ${pendingOption.description} Case는 Completed로 변경됩니다.`
             : undefined
         }
-        confirmLabel={busy ? '?? ?�' : '??'}
-        cancelLabel="??"
+        confirmLabel={busy ? '적용 중…' : '판정 확정'}
+        cancelLabel="취소"
         tone={
           pending === 'resale_confirmed'
             ? 'danger'
