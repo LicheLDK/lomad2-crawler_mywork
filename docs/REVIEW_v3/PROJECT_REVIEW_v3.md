@@ -688,7 +688,12 @@ UI 개선으로 기능 대부분이 하위 메뉴로 이동했기 때문에, 이
 
 아이러니하게도 이 커밋은 `PlaceholderPage`(준비중 안내 컴포넌트)를 라우트에서 제거해 **완전한 데드 코드로 만들었다** — `web/src/pages/PlaceholderPage.tsx`는 이제 어디서도 import되지 않는다. 이 컴포넌트를 두 경로에 다시 연결하면 문제가 해결된다.
 
-#### U9. 프론트 Investigation이 여전히 localStorage 목업이다 (심각 · v2 미기재)
+#### U9. 프론트 Investigation이 여전히 localStorage 목업이다 (심각 · v2 미기재) — **해소**
+
+> **해소일**: 2026-07-29 · **작업**: `docs/REVIEW_v3/작업지시서_v3_D.md` TASK D-1 ~ D-7  
+> **핵심**: 읽기 전환 → DTO 매핑 → 스키마 → 쓰기 API → Drawer 연결 → 수동생성·Rental·Overview → mock/휴리스틱 정리
+
+##### 해소 전 문제 (기록)
 
 이것은 UI 개선 커밋이 만든 문제는 아니지만, v2에 기재되지 않았고 UI 개선으로 **Investigation이 최상위 메뉴 4개 하위 항목으로 격상되면서 문제가 더 두드러졌다.**
 
@@ -705,12 +710,39 @@ UI 개선으로 기능 대부분이 하위 메뉴로 이동했기 때문에, 이
 
 백엔드에는 `GET /api/investigations`, `GET /api/investigations/:id`, `GET /api/investigations/config`가 이미 있다. 다만 상태 변경·담당자 배정·메모·최종 판단 저장용 쓰기 API는 없어서, 프론트를 완전히 전환하려면 백엔드 작업이 함께 필요하다.
 
-권장 보완:
+##### 해소 내용
 
-1. `api.ts`에 investigation 조회 함수를 추가하고 `InvestigationProvider`의 소스를 서버로 바꾼다.
-2. 백엔드에 케이스 상태 전이·담당자·메모·최종 판단 쓰기 API를 추가한다(v2 §7.1의 워크플로 고도화와 동일 작업).
-3. 목업 시드(`data/mock.ts`)와 클라이언트 휴리스틱 AI(`lib/ai.ts`)를 제거한다.
-4. 전환 후 서버 AI 분석 결과(`InvestigationCase`의 timeline JSON)를 화면에 표시한다.
+| TASK | 내용 |
+| ---- | ---- |
+| D-1 | `api.ts` investigation GET + Provider 서버 전환, mock 시드 중단, 쓰기 UI 차단 |
+| D-2 | `mapServerCase` 단일 매퍼, Drawer AI/timeline 서버 우선 |
+| D-3 | `notes`/`finalDecision`/`decidedAt`/`dueDate` 컬럼 + 마이그레이션 |
+| D-4 | status·assignment·notes·final-decision·수동 POST·stats 쓰기 API |
+| D-5 | Drawer 섹션 → 쓰기 API 연결, localStorage 쓰기 제거 |
+| D-6 | 수동 「조사 시작」POST, Rental→동일 CaseDrawer, Overview `stats.last24h` |
+| D-7 | `mock.ts`/`store.ts` 삭제, `deriveAi*` 휴리스틱 제거, 본 기록 |
+
+##### 확정 정책 (D1~D7)
+
+| ID | 정책 | 확정 내용 |
+| -- | ---- | --------- |
+| **D1** | 전환 순서 | **읽기 먼저, 쓰기 나중**. D-1·D-2 목록/상세 GET → D-3·D-4 스키마·쓰기 → D-5·D-6 UI 연결 → D-7 정리 |
+| **D2** | 수동 「조사 시작」 | `POST /api/investigations`. `resultId` 중복 시 **기존 케이스 반환**(새 row 금지) |
+| **D3** | Evidence | 1차 범위 **읽기 전용**. evidence 테이블/컬럼 미추가. 편집 UI disabled |
+| **D4** | dueDate | DB 컬럼 추가 (`timestamptz`, nullable) |
+| **D5** | Overview 「오늘 Investigation」 | `GET /api/investigations/stats`의 **케이스 건수**(`last24h`). 크롤 결과 수 아님 |
+| **D6** | AI 표시 | 서버 `aiAnalysis` / timeline 요약·`aiRecommendation` **우선**. D-7에서 클라이언트 `deriveAi*` 휴리스틱 **제거** (부재 시 empty state) |
+| **D7** | Rental ↔ Investigation | Rental 조사 행 → `InvestigationProvider.openCase`로 **동일 CaseDrawer**. 별도 Rental-only 상세 없음 |
+
+##### D-7 정리 판정 (2026-07-29)
+
+| 항목 | 판정 | 근거 |
+| ---- | ---- | ---- |
+| `data/mock.ts` | **삭제** | 시드 경로 없음. 서버가 단일 소스 |
+| `lib/store.ts` | **삭제** | localStorage 쓰기/시드 API 전부 미사용. Provider·`api.ts`가 대체 |
+| `deriveAi*` | **제거** | 케이스 생성 시 서버가 `buildAiAnalysis`로 메트릭을 채움. 점수만으로 바를 합성하면 운영자가 서버 AI로 오인. 부재 시 empty state |
+| Analytics Investigation `byStatus` | **범위 밖** | Overview/stats는 D-6에서 연결. Analytics 패널은 후속(우선순위 B U7) |
+| Evidence CRUD | **범위 밖** | D3 정책 유지 |
 
 #### U10. 프론트 데드 코드 정리 필요
 
@@ -797,15 +829,15 @@ v2의 A~E를 유지하되, v3 신규 발견 중 즉시 처리 항목을 **우선
 7. rule threshold 튜닝 UI 또는 운영 설정 API 제공 (v2 C-4)
 8. false positive/negative 피드백을 rule/prompt 개선에 반영 (v2 C-5)
 
-### 우선순위 D: 프론트/사용성 (v2 §6 D + UI 신규 반영)
+### 우선순위 D: 프론트/사용성 (v2 §6 D + UI 신규 반영) — U9 Investigation 실 API **해소** (TASK D-1~D-7)
 
-1. **Investigation을 localStorage에서 실 API로 전환** (U9) — v2 D-2·D-3을 포괄하는 상위 작업
-2. 케이스 상태 변경·담당자·메모·최종 판단 저장 API 추가 (U9, v2 D-3)
+1. ~~**Investigation을 localStorage에서 실 API로 전환** (U9)~~ ✅ — v2 D-2·D-3을 포괄 (TASK D-1~D-7, 2026-07-29)
+2. ~~케이스 상태 변경·담당자·메모·최종 판단 저장 API 추가 (U9, v2 D-3)~~ ✅ (TASK D-3~D-5)
 3. route 단위 code splitting (P2-A)
 4. 태블릿(md) 축약 사이드바에서 하위 메뉴 접근 수단 제공 (U5)
 5. System AI Engine·Prompt 섹션을 실제 API로 연결 (U6)
 6. `Investigating` 상태 메뉴 노출 또는 워크플로 통합 (U4)
-7. 검색 결과와 Investigation 간 이동 동선 개선 (v2 D-4)
+7. ~~검색 결과와 Investigation 간 이동 동선 개선 (v2 D-4)~~ ✅ (TASK D-6 수동 POST·Drawer)
 8. 에러 메시지 한글 문구 정리, 소스 문자열 인코딩 손상 복구 (P2-B, v2 D-5)
 9. 사이드바 배지·History 저장/즐겨찾기 기능 완성 또는 제거 (U11)
 10. focus trap, `aria-controls`, `aria-selected` 등 접근성 보완 (U12)
@@ -868,7 +900,7 @@ web/src/api.ts 에 추가
   aiUsageToday()  → GET /ai/usage/today
 ```
 
-"오늘 AI 분석" 타일을 여기에 연결한다. "오늘 Investigation"은 조사 케이스 카운트 API가 없으므로, 단기적으로 레이블을 "오늘 수집 결과"로 정정하고 우선순위 D-1 전환 시 실제 케이스 수로 교체한다.
+"오늘 AI 분석" 타일을 여기에 연결한다. "오늘 Investigation"은 `GET /api/investigations/stats`의 케이스 건수로 연결한다(TASK D-5·D-6, U9 해소).
 
 ### 0-4. Investigation 기본 필터
 
@@ -926,7 +958,7 @@ v2 §7 전체를 유지한다. v3에서 상태 주석을 덧붙였다.
 - 최종 판단과 AI 추천 분리 저장
 - BackOffice로 최종 판단 callback
 
-> v3 주석: 프론트에는 이 UI가 이미 목업으로 존재한다(`features/investigation/components/sections/*` — Assignment, Notes, Evidence, FinalDecision, Workflow, Timeline). **화면은 만들어져 있고 서버 저장만 없는 상태**이므로, 백엔드 쓰기 API를 추가하면 비교적 빠르게 완성할 수 있다(U9, 우선순위 D-1·D-2).
+> v3 주석: Investigation Drawer 섹션(Assignment, Notes, Evidence, FinalDecision, Workflow, Timeline)은 **서버 API에 연결 완료**(TASK D-1~D-7, U9 해소). Evidence CRUD·BackOffice final-decision callback은 후속.
 
 ### 11.2 검색 품질 개선
 
@@ -984,12 +1016,12 @@ v3에서 새로 확인한 가장 중요한 사실은 **AI 판단 엔진이 구�
 
 두 번째로 중요한 것은 **개발 기반의 부재**다. lint가 실행되지 않고 CI가 없는 상태(N3)에서 다중 키워드 1:N 구조 개편 같은 침습적 작업을 진행하는 것은 위험하다. 실제로 N1·N2 같은 결함이 오래 남아 있었던 것, `AppSidebar.tsx`의 포맷 깨짐과 미사용 export가 걸러지지 않은 것 모두 이 공백의 결과다. 우선순위 0에 lint·CI를 넣은 이유다.
 
-세 번째는 **프론트 Investigation의 목업 의존**(U9)이다. UI 개선으로 Investigation이 하위 메뉴 4개를 가진 최상위 메뉴로 격상되었지만, 그 데이터는 여전히 브라우저 localStorage다. 같은 대시보드의 Rental 화면은 서버 케이스를 읽고 있어 두 개의 진실이 공존한다. 화면(섹션 컴포넌트 10개)은 이미 만들어져 있으므로, 백엔드 쓰기 API를 추가하는 것이 실질적 완성으로 가는 가장 짧은 경로다.
+세 번째는 ~~**프론트 Investigation의 목업 의존**(U9)~~ ✅ **해소** (2026-07-29, TASK D-1~D-7). `/investigation`·Overview·검색 「조사 시작」·Rental 조사 이력이 서버 `investigation_cases`를 단일 소스로 쓰며, mock 시드·localStorage 쓰기·클라이언트 `deriveAi*` 휴리스틱을 제거했다. Evidence CRUD·Analytics byStatus·BackOffice final-decision callback은 후속이다.
 
 정리하면 다음 순서를 권한다.
 
 1. **AI 판단 정확도 복구** (N1, N2) — 작업량 최소, 효과 즉각
 2. **개발 기반 복구** (N3) — 이후 모든 작업의 안전망
 3. ~~**Search Job 1:N 구조 정리** (P1-A)~~ ✅ 해소 (2026-07-29, TASK A-1~A-6)
-4. **Investigation 실 API 전환** (U9) — 업무 시스템으로서의 완성
+4. ~~**Investigation 실 API 전환** (U9)~~ ✅ 해소 (2026-07-29, TASK D-1~D-7)
 5. **운영 관측성·AI provider 명확화** (P1-B, P1-C) — 화면 골격이 준비되어 있어 비용이 낮아진 상태

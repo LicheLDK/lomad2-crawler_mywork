@@ -245,7 +245,7 @@ export function mapTimeline(
  * 서버 Investigation DTO → 프론트 InvestigationCase.
  * 목록·상세·Provider 모두 이 함수만 경유한다.
  *
- * D6: aiAnalysis / investigationSummary / aiRecommendation 은 서버 값 우선.
+ * D6/D-7: aiAnalysis / investigationSummary / aiRecommendation 은 서버 값만.
  * D-5: notes / dueDate / finalDecision / decidedAt 은 서버 값 매핑 (부재 시 빈 값).
  * Evidence는 서버 테이블 없음 — 빈 배열 유지 (편집 disabled).
  */

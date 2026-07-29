@@ -43,7 +43,6 @@ const METRICS: {
 ];
 
 export function InvestigationAiPanel({ row }: { row: InvestigationCase }) {
-  // D6: 서버 aiAnalysis 우선, 없을 때만 deriveAi* fallback
   const analysis = resolveAiAnalysis(row);
   const finalScore = clampScore(row.aiScore);
   const finalPct = toPct(finalScore);
@@ -55,32 +54,38 @@ export function InvestigationAiPanel({ row }: { row: InvestigationCase }) {
       </h3>
 
       <div className="rounded-xl border border-ink-100 bg-white p-4">
-        <ul className="space-y-4">
-          {METRICS.map(({ key, label }) => {
-            const score = analysis[key];
-            const pct = toPct(score);
-            return (
-              <li key={key}>
-                <div className="mb-1.5 flex items-baseline justify-between gap-2">
-                  <span className="text-sm font-medium text-ink-800">
-                    {label}
-                  </span>
-                  <span
-                    className={`text-sm font-medium tabular-nums ${barText(score)}`}
-                  >
-                    {pct}%
-                  </span>
-                </div>
-                <div className="h-2 overflow-hidden rounded-full bg-sand-100">
-                  <div
-                    className={`h-full rounded-full transition-all duration-500 ${barFill(score)}`}
-                    style={{ width: `${pct}%` }}
-                  />
-                </div>
-              </li>
-            );
-          })}
-        </ul>
+        {analysis ? (
+          <ul className="space-y-4">
+            {METRICS.map(({ key, label }) => {
+              const score = analysis[key];
+              const pct = toPct(score);
+              return (
+                <li key={key}>
+                  <div className="mb-1.5 flex items-baseline justify-between gap-2">
+                    <span className="text-sm font-medium text-ink-800">
+                      {label}
+                    </span>
+                    <span
+                      className={`text-sm font-medium tabular-nums ${barText(score)}`}
+                    >
+                      {pct}%
+                    </span>
+                  </div>
+                  <div className="h-2 overflow-hidden rounded-full bg-sand-100">
+                    <div
+                      className={`h-full rounded-full transition-all duration-500 ${barFill(score)}`}
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        ) : (
+          <p className="text-sm text-ink-500">
+            서버에 저장된 AI 분석 메트릭이 없습니다.
+          </p>
+        )}
 
         <div
           className={`mt-5 rounded-xl px-4 py-4 ring-1 ${finalTone(finalScore)}`}

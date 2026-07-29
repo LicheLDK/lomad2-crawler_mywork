@@ -105,7 +105,7 @@ export type InvestigationCase = {
   /** @deprecated noteEntries 사용 */
   notes?: string | null;
   noteEntries?: InvestigationNote[];
-  /** 서버 메트릭(0~1). 부분만 올 수 있음 → 섹션에서 deriveAi* fallback */
+  /** 서버 메트릭(0~1). 없으면 AI Analysis 패널 empty state */
   aiAnalysis?: Partial<InvestigationAiAnalysis>;
   timeline?: InvestigationTimelineEvent[];
   evidence?: InvestigationEvidence[];
@@ -207,6 +207,3 @@ export type InvestigationStatsResponse = {
   last24h: number;
   byStatus: Record<InvestigationStatus, number>;
 };
-
-/** @deprecated D-5/D-6 이후 미사용 — D-7에서 제거 예정 */
-export const WRITE_API_PENDING_HINT = '쓰기 API 연결 전';
