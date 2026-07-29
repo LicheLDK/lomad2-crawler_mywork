@@ -5,6 +5,7 @@ import {
   SearchJob,
   SearchJobStatus,
 } from '@/database/entities/search-job.entity';
+import { SearchJobHistory } from '@/database/entities/search-job-history.entity';
 import { SearchService } from '@/modules/search/search.service';
 import { CreateSearchJobDto } from './dto/create-search-job.dto';
 import { SearchJobProgressSync } from './search-job-progress.sync';
@@ -20,6 +21,8 @@ export class SearchJobService {
   constructor(
     @InjectRepository(SearchJob)
     private readonly jobRepo: Repository<SearchJob>,
+    @InjectRepository(SearchJobHistory)
+    private readonly jobHistoryRepo: Repository<SearchJobHistory>,
     private readonly searchService: SearchService,
     private readonly progressSync: SearchJobProgressSync,
     private readonly keywordGenerator: SearchKeywordGeneratorService,
@@ -256,6 +259,9 @@ export class SearchJobService {
           useCache: job.useCache,
         });
 
+        // TASK A-3: 이중 쓰기 — 완료 판정/집계는 기존 로직 유지
+        await this.recordJobHistory(job.id, keyword, result);
+
         if (result.status === 'failed') {
           this.logger.warn(
             `SearchJob ${job.id} keyword failed: ${keyword}`,
@@ -326,6 +332,47 @@ export class SearchJobService {
       if (failed) {
         await this.progressSync.publishFromJob(failed, message);
       }
+    }
+  }
+
+  /**
+   * TASK A-3 이중 쓰기: search_job_histories 에 키워드별 행을 기록한다.
+   * 기록 실패는 검색 실패로 전파하지 않는다 (관찰용).
+   */
+  private async recordJobHistory(
+    searchJobId: string,
+    keyword: string,
+    result: {
+      searchId?: string;
+      status?: string;
+      source?: string;
+      resultCount?: number;
+    },
+  ): Promise<void> {
+    try {
+      if (!result?.searchId) return;
+
+      const terminalCached =
+        result.status === 'cached' ||
+        result.status === 'completed' ||
+        result.status === 'partial';
+      const needsCrawl = !terminalCached && result.source !== 'cache';
+
+      await this.jobHistoryRepo.save(
+        this.jobHistoryRepo.create({
+          searchJobId,
+          keyword,
+          searchHistoryId: result.searchId,
+          status: needsCrawl ? 'queued' : String(result.status ?? 'queued'),
+          resultCount: result.resultCount ?? 0,
+        }),
+      );
+    } catch (error) {
+      this.logger.warn(
+        `SearchJob ${searchJobId} history dual-write failed keyword=${keyword}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
     }
   }
 

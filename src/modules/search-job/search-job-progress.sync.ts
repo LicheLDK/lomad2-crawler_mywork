@@ -11,6 +11,7 @@ import Redis from 'ioredis';
 import {
   SearchJob,
 } from '@/database/entities/search-job.entity';
+import { SearchJobHistory } from '@/database/entities/search-job-history.entity';
 import {
   CRAWL_PROGRESS_CHANNEL,
   CrawlProgressEvent,
@@ -22,7 +23,9 @@ import {
 import {
   applyCrawlProgressToJob,
   clampProgress,
-} from './search-job-status.util';/**
+} from './search-job-status.util';
+
+/**
  * 크롤 progress(searchId) → Search Job progress(jobId) 동기화.
  * Redis pub/sub + DB 컬럼 갱신 + job progress 채널 발행.
  */
@@ -37,6 +40,8 @@ export class SearchJobProgressSync
   constructor(
     @InjectRepository(SearchJob)
     private readonly jobRepo: Repository<SearchJob>,
+    @InjectRepository(SearchJobHistory)
+    private readonly jobHistoryRepo: Repository<SearchJobHistory>,
     private readonly config: ConfigService,
   ) {}
 
@@ -107,6 +112,9 @@ export class SearchJobProgressSync
       const crawl = JSON.parse(message) as CrawlProgressEvent;
       if (!crawl?.searchId) return;
 
+      // TASK A-3: 키워드별 history 행 상태/결과수 갱신 (Job 판정은 변경하지 않음)
+      await this.updateJobHistoryFromCrawl(crawl);
+
       const job = await this.jobRepo.findOne({
         where: { searchHistoryId: crawl.searchId },
       });
@@ -119,6 +127,35 @@ export class SearchJobProgressSync
     } catch (error) {
       this.logger.warn(
         `Job progress sync failed: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
+  }
+
+  /**
+   * TASK A-3 이중 쓰기: crawl progress 로 search_job_histories 행을 갱신한다.
+   * 실패해도 Job 동기화는 계속한다.
+   */
+  private async updateJobHistoryFromCrawl(
+    crawl: CrawlProgressEvent,
+  ): Promise<void> {
+    try {
+      const rows = await this.jobHistoryRepo.find({
+        where: { searchHistoryId: crawl.searchId },
+      });
+      if (rows.length === 0) return;
+
+      for (const row of rows) {
+        row.status = crawl.status;
+        if (crawl.resultCount != null) {
+          row.resultCount = crawl.resultCount;
+        }
+      }
+      await this.jobHistoryRepo.save(rows);
+    } catch (error) {
+      this.logger.warn(
+        `SearchJobHistory progress dual-write failed searchId=${crawl.searchId}: ${
           error instanceof Error ? error.message : String(error)
         }`,
       );
