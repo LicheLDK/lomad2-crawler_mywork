@@ -940,6 +940,11 @@ export class InvestigationService {
       judgmentReasons: aiOpinion.reasons,
       /** AI Recommendation 패널 */
       aiRecommendation: extractAiRecommendation(c.timeline ?? []),
+      notes: c.notes ?? [],
+      finalDecision: c.finalDecision ?? null,
+      finalDecisionNote: c.finalDecisionNote ?? null,
+      decidedAt: c.decidedAt ?? null,
+      dueDate: c.dueDate ?? null,
       createdAt: c.createdAt,
     };
   }

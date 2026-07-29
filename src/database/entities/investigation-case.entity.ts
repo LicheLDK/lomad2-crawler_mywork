@@ -33,6 +33,15 @@ export interface InvestigationAiAnalysis {
   ocrMatch: number;
 }
 
+/** 조사 메모 (jsonb notes 배열 요소) */
+export interface InvestigationNote {
+  id: string;
+  body: string;
+  author: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 @Entity('investigation_cases')
 export class InvestigationCaseEntity {
   @PrimaryGeneratedColumn('uuid')
@@ -114,6 +123,24 @@ export class InvestigationCaseEntity {
 
   @Column({ type: 'jsonb', nullable: true })
   aiAnalysis!: InvestigationAiAnalysis | null;
+
+  /** 메모 배열 — D-3 워크플로 필드 (쓰기 API 는 D-4) */
+  @Column({ type: 'jsonb', default: [] })
+  notes!: InvestigationNote[];
+
+  /** 최종 판단 코드 (예: resale_confirmed) */
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  finalDecision!: string | null;
+
+  /** 최종 판단 메모 */
+  @Column({ type: 'text', nullable: true })
+  finalDecisionNote!: string | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  decidedAt!: Date | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  dueDate!: Date | null;
 
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt!: Date;
