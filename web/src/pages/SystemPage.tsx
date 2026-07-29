@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import {
   Activity,
@@ -13,9 +13,12 @@ import {
   Network,
 } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
-import type { HealthPayload } from '../types';
+import { api } from '../api';
+import type { AiUsageSummary, HealthPayload } from '../types';
 
 type ServiceStatus = 'ONLINE' | 'OFFLINE' | 'WARNING' | 'READY';
+
+type AiUsageLoadState = 'loading' | 'ok' | 'unavailable';
 
 type StatusCardModel = {
   id: string;
@@ -64,7 +67,53 @@ function fromUp(ok: boolean | undefined): ServiceStatus {
   return 'OFFLINE';
 }
 
-function buildCards(health: HealthPayload | null): StatusCardModel[] {
+function formatUsd(value: number): string {
+  return `$${value.toFixed(4)}`;
+}
+
+function aiEngineCard(
+  apiOnline: boolean,
+  aiLoad: AiUsageLoadState,
+  summary: AiUsageSummary | null,
+): StatusCardModel {
+  if (aiLoad === 'ok' && summary) {
+    const failHint =
+      summary.today.failureCount > 0
+        ? ` · 실패 ${summary.today.failureCount}`
+        : '';
+    return {
+      id: 'ai',
+      label: 'AI Engine',
+      icon: Bot,
+      status: summary.today.failureCount > 0 ? 'WARNING' : 'ONLINE',
+      detail: `오늘 ${summary.today.callCount.toLocaleString()}회 · ${formatUsd(summary.today.costUsd)}${failHint} · 월간 ${formatUsd(summary.month.costUsd)} (${summary.month.yearMonth})`,
+    };
+  }
+
+  if (aiLoad === 'unavailable') {
+    return {
+      id: 'ai',
+      label: 'AI Engine',
+      icon: Bot,
+      status: 'WARNING',
+      detail: '비활성·키 없음 (usage API 조회 실패)',
+    };
+  }
+
+  return {
+    id: 'ai',
+    label: 'AI Engine',
+    icon: Bot,
+    status: apiOnline ? 'ONLINE' : 'OFFLINE',
+    detail: apiOnline ? 'usage 불러오는 중…' : 'API 연결 필요',
+  };
+}
+
+function buildCards(
+  health: HealthPayload | null,
+  aiLoad: AiUsageLoadState,
+  summary: AiUsageSummary | null,
+): StatusCardModel[] {
   const info = health?.info;
   const queue = info?.queue ?? null;
   const waiting = queue?.waiting ?? 0;
@@ -143,15 +192,7 @@ function buildCards(health: HealthPayload | null): StatusCardModel[] {
       status: 'READY',
       detail: '메뉴만 추가 · 스케줄러 UI 준비중',
     },
-    {
-      id: 'ai',
-      label: 'AI Engine',
-      icon: Bot,
-      status: apiOnline ? 'ONLINE' : 'OFFLINE',
-      detail: apiOnline
-        ? 'API 경유 AI 기능 가용 (상세는 Prompt/Rules)'
-        : 'API 연결 필요',
-    },
+    aiEngineCard(apiOnline, aiLoad, summary),
     {
       id: 'prompt',
       label: 'Prompt',
@@ -237,7 +278,30 @@ function StatusCard({
 export function SystemPage({ health }: { health: HealthPayload | null }) {
   const [searchParams] = useSearchParams();
   const section = searchParams.get('section') || 'worker';
-  const cards = buildCards(health);
+  const [aiSummary, setAiSummary] = useState<AiUsageSummary | null>(null);
+  const [aiLoad, setAiLoad] = useState<AiUsageLoadState>('loading');
+  const cards = buildCards(health, aiLoad, aiSummary);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const summary = await api.aiUsageSummary();
+        if (!cancelled) {
+          setAiSummary(summary);
+          setAiLoad('ok');
+        }
+      } catch {
+        if (!cancelled) {
+          setAiSummary(null);
+          setAiLoad('unavailable');
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     const el = document.getElementById(`section-${section}`);

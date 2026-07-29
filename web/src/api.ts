@@ -44,6 +44,16 @@ export const api = {
     request<import('./types').HealthPayload>('/health', {}, { allowErrorStatus: true }),
   stats: () => request<import('./types').StatsOverview>('/stats'),
   aiUsageToday: () => request<import('./types').AiUsageToday>('/ai/usage/today'),
+  aiUsageSummary: () =>
+    request<import('./types').AiUsageSummary>('/ai/usage/summary'),
+  aiUsageMonthly: (yearMonth?: string) => {
+    const q = yearMonth
+      ? `?yearMonth=${encodeURIComponent(yearMonth)}`
+      : '';
+    return request<import('./types').AiUsageMonthly>(`/ai/usage/monthly${q}`);
+  },
+  aiUsageByProvider: () =>
+    request<import('./types').AiUsageByProvider[]>('/ai/usage/by-provider'),
   search: (body: unknown) =>
     request<import('./types').SearchDetail>('/search', {
       method: 'POST',

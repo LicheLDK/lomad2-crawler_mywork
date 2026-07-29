@@ -12,7 +12,7 @@ import {
   YAxis,
 } from 'recharts';
 import { api } from '../api';
-import type { StatsOverview } from '../types';
+import type { AiUsageSummary, StatsOverview } from '../types';
 import {
   INVESTIGATION_STATUSES,
   type InvestigationStatsResponse,
@@ -49,6 +49,10 @@ function formatDay(day: string) {
   return `${Number(m)}/${Number(d)}`;
 }
 
+function formatUsd(value: number): string {
+  return `$${value.toFixed(4)}`;
+}
+
 export function AnalyticsPage({ stats }: { stats: StatsOverview | null }) {
   const [searchParams] = useSearchParams();
   const section = searchParams.get('section') || 'search';
@@ -57,6 +61,9 @@ export function AnalyticsPage({ stats }: { stats: StatsOverview | null }) {
   );
   const [invStatsLoading, setInvStatsLoading] = useState(true);
   const [invStatsError, setInvStatsError] = useState(false);
+  const [aiSummary, setAiSummary] = useState<AiUsageSummary | null>(null);
+  const [aiLoading, setAiLoading] = useState(true);
+  const [aiUnavailable, setAiUnavailable] = useState(false);
 
   useEffect(() => {
     const id =
@@ -87,6 +94,29 @@ export function AnalyticsPage({ stats }: { stats: StatsOverview | null }) {
         }
       } finally {
         if (!cancelled) setInvStatsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const summary = await api.aiUsageSummary();
+        if (!cancelled) {
+          setAiSummary(summary);
+          setAiUnavailable(false);
+        }
+      } catch {
+        if (!cancelled) {
+          setAiSummary(null);
+          setAiUnavailable(true);
+        }
+      } finally {
+        if (!cancelled) setAiLoading(false);
       }
     })();
     return () => {
@@ -135,15 +165,14 @@ export function AnalyticsPage({ stats }: { stats: StatsOverview | null }) {
     [invStatusData],
   );
 
-  const keywordData = useMemo(
+  const providerData = useMemo(
     () =>
-      (stats?.topKeywords ?? []).map((k) => ({
-        name:
-          k.keyword.length > 12 ? `${k.keyword.slice(0, 12)}…` : k.keyword,
-        full: k.keyword,
-        count: k.searchCount,
+      (aiSummary?.byProvider ?? []).map((row) => ({
+        name: row.provider,
+        calls: row.callCount,
+        cost: row.costUsd,
       })),
-    [stats],
+    [aiSummary],
   );
 
   const trendData = useMemo(
@@ -257,52 +286,96 @@ export function AnalyticsPage({ stats }: { stats: StatsOverview | null }) {
           id="section-ai"
           className={`scroll-mt-4 rounded-2xl ${highlight('ai')}`}
         >
-          <Panel eyebrow="AI" title="AI 분석 통계">
+          <Panel eyebrow="AI · usage" title="AI 사용량 · 비용">
             <p className="mb-3 text-sm text-ink-500">
-              키워드·검색 추세 기반 요약 (기존 통계 데이터 재사용 · 별도 API 없음)
+              GET /ai/usage/summary · by-provider
+              {aiSummary?.month.yearMonth
+                ? ` · ${aiSummary.month.yearMonth}`
+                : ''}
             </p>
-            {keywordData.length === 0 ? (
-              <p className="text-sm text-ink-500">인기 키워드가 없습니다.</p>
+            {aiLoading ? (
+              <p className="text-sm text-ink-500">AI usage를 불러오는 중…</p>
+            ) : aiUnavailable ? (
+              <p className="text-sm text-ink-500">
+                비활성·키 없음 — AI usage API를 조회하지 못했습니다.
+              </p>
+            ) : aiSummary == null ? (
+              <p className="text-sm text-ink-500">표시할 AI usage 데이터가 없습니다.</p>
             ) : (
-              <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    data={keywordData}
-                    layout="vertical"
-                    margin={{ top: 8, right: 16, left: 8, bottom: 0 }}
-                  >
-                    <CartesianGrid stroke={SAND} strokeDasharray="3 3" horizontal={false} />
-                    <XAxis
-                      type="number"
-                      allowDecimals={false}
-                      tick={{ fill: MUTED, fontSize: 12 }}
-                      axisLine={false}
-                      tickLine={false}
-                    />
-                    <YAxis
-                      type="category"
-                      dataKey="name"
-                      width={88}
-                      tick={{ fill: INK, fontSize: 12 }}
-                      axisLine={false}
-                      tickLine={false}
-                    />
-                    <Tooltip
-                      formatter={(value) => [Number(value ?? 0), '검색']}
-                      labelFormatter={(_, payload) =>
-                        (payload?.[0]?.payload as { full?: string } | undefined)
-                          ?.full ?? ''
-                      }
-                      contentStyle={{
-                        borderRadius: 12,
-                        border: '1px solid #e2e8f0',
-                        fontSize: 13,
-                      }}
-                    />
-                    <Bar dataKey="count" name="검색" fill={INK} radius={[0, 8, 8, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
+              <>
+                <div className="mb-4 grid gap-2 sm:grid-cols-2">
+                  <MetricCard
+                    label="오늘 호출"
+                    value={aiSummary.today.callCount}
+                    hint={`${formatUsd(aiSummary.today.costUsd)} · ${aiSummary.today.date}`}
+                  />
+                  <MetricCard
+                    label="월간 호출"
+                    value={aiSummary.month.callCount}
+                    hint={`${formatUsd(aiSummary.month.costUsd)} · ${aiSummary.month.yearMonth}`}
+                  />
+                </div>
+                {providerData.length === 0 ? (
+                  <p className="text-sm text-ink-500">
+                    이번 달 Provider별 사용 기록이 없습니다.
+                  </p>
+                ) : (
+                  <div className="h-56">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart
+                        data={providerData}
+                        layout="vertical"
+                        margin={{ top: 8, right: 16, left: 8, bottom: 0 }}
+                      >
+                        <CartesianGrid
+                          stroke={SAND}
+                          strokeDasharray="3 3"
+                          horizontal={false}
+                        />
+                        <XAxis
+                          type="number"
+                          allowDecimals={false}
+                          tick={{ fill: MUTED, fontSize: 12 }}
+                          axisLine={false}
+                          tickLine={false}
+                        />
+                        <YAxis
+                          type="category"
+                          dataKey="name"
+                          width={88}
+                          tick={{ fill: INK, fontSize: 12 }}
+                          axisLine={false}
+                          tickLine={false}
+                        />
+                        <Tooltip
+                          formatter={(value, name) => {
+                            const n = Number(value ?? 0);
+                            if (name === 'cost') {
+                              return [formatUsd(n), '비용'];
+                            }
+                            return [n, '호출'];
+                          }}
+                          contentStyle={{
+                            borderRadius: 12,
+                            border: '1px solid #e2e8f0',
+                            fontSize: 13,
+                          }}
+                        />
+                        <Bar
+                          dataKey="calls"
+                          name="calls"
+                          fill={INK}
+                          radius={[0, 8, 8, 0]}
+                        />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+                <p className="mt-2 text-[11px] text-ink-400">
+                  Provider별 호출 수 · 오늘 실패 {aiSummary.today.failureCount}건
+                  · 평균 응답 {aiSummary.today.avgResponseTimeMs}ms
+                </p>
+              </>
             )}
           </Panel>
         </div>

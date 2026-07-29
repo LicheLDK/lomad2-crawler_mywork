@@ -73,8 +73,8 @@ export interface StatsOverview {
   generatedAt: string;
 }
 
-export interface AiUsageToday {
-  date: string;
+/** AI usage 집계 버킷 — GET /ai/usage/* 공통 */
+export interface AiUsageBucket {
   callCount: number;
   successCount: number;
   failureCount: number;
@@ -84,6 +84,27 @@ export interface AiUsageToday {
   costUsd: number;
   avgResponseTimeMs: number;
   retryTotal: number;
+}
+
+export interface AiUsageToday extends AiUsageBucket {
+  date: string;
+}
+
+export interface AiUsageMonthly extends AiUsageBucket {
+  yearMonth: string;
+}
+
+export interface AiUsageByProvider extends AiUsageBucket {
+  provider: string;
+}
+
+/** GET /ai/usage/summary */
+export interface AiUsageSummary {
+  today: AiUsageToday;
+  month: AiUsageMonthly;
+  byProvider: AiUsageByProvider[];
+  currency: 'USD';
+  generatedAt: string;
 }
 
 export interface HealthPayload {
