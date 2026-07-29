@@ -36,6 +36,14 @@ export interface SearchDetail {
   jobId?: string;
 }
 
+/** Search Job 키워드별 검색 내역 (search_job_histories) */
+export interface KeywordHistoryItem {
+  keyword: string | null;
+  status: string;
+  resultCount: number;
+  searchHistoryId: string;
+}
+
 export interface StatsOverview {
   totals: { results: number; searches: number; keywords: number };
   last24h: { results: number; searches: number };

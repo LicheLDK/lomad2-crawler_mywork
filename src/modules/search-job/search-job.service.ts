@@ -128,15 +128,18 @@ export class SearchJobService {
     if (!event) {
       throw new NotFoundException(`Search job not found: ${jobId}`);
     }
+    const keywordHistories = await this.listKeywordHistories(jobId);
     return {
       jobId: event.jobId,
       status: event.status,
       currentSite: event.currentSite,
       progress: event.progress,
+      // A1: 고유 매물 수 (키워드별 합계와 다를 수 있음)
       resultCount: event.resultCount,
       searchHistoryId: event.searchHistoryId,
       message: event.message,
       at: event.at,
+      keywordHistories,
     };
   }
 
@@ -213,7 +216,7 @@ export class SearchJobService {
       : [];
 
     return {
-      job: this.toDetailResponse(job),
+      job: await this.toDetailResponse(job),
       order,
       orderError,
       searchHistories,
@@ -768,6 +771,7 @@ export class SearchJobService {
     const completedAt = (job.finishedAt ?? new Date()).toISOString();
 
     try {
+      const keywordSummaries = await this.listKeywordHistories(searchJobId);
       const sent = await this.rentalService.notifySearchCompleted({
         jobId: job.id,
         investigationCount,
@@ -775,6 +779,9 @@ export class SearchJobService {
         orderNo: job.orderNo,
         status:
           job.status === SearchJobStatus.PARTIAL ? 'partial' : 'completed',
+        // A1: Job resultCount는 고유 매물 수. 키워드별 합계와 다를 수 있음
+        resultCount: job.resultCount,
+        keywordSummaries,
       });
       if (sent) {
         await this.jobRepo.update(searchJobId, {
@@ -824,7 +831,26 @@ export class SearchJobService {
     };
   }
 
-  private toDetailResponse(job: SearchJob) {
+  /**
+   * 키워드별 검색 내역.
+   * resultCount는 키워드가 찾은 수 그대로이며, Job resultCount(고유 매물)와
+   * 합계가 다를 수 있다 (A1).
+   */
+  private async listKeywordHistories(searchJobId: string) {
+    const rows = await this.jobHistoryRepo.find({
+      where: { searchJobId },
+      order: { createdAt: 'ASC' },
+    });
+    return rows.map((row) => ({
+      keyword: row.keyword,
+      status: row.status,
+      resultCount: row.resultCount ?? 0,
+      searchHistoryId: row.searchHistoryId,
+    }));
+  }
+
+  private async toDetailResponse(job: SearchJob) {
+    const keywordHistories = await this.listKeywordHistories(job.id);
     return {
       jobId: job.id,
       orderNo: job.orderNo,
@@ -841,6 +867,7 @@ export class SearchJobService {
       /** 실행 스냅샷 (마스터 아님) */
       productNameSnapshot: job.productName,
       productNoSnapshot: job.productNo,
+      keywordHistories,
     };
   }
 

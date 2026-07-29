@@ -56,6 +56,8 @@ export class RentalService {
       completedAt: payload.completedAt,
       orderNo: payload.orderNo ?? null,
       status: payload.status ?? 'completed',
+      resultCount: payload.resultCount,
+      keywordSummaries: payload.keywordSummaries,
     });
 
     this.logger.log(

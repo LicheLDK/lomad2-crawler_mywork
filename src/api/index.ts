@@ -3,6 +3,7 @@ export { RentalClient } from './rental.client';
 export { RentalService } from './rental.service';
 export {
   RentalApiError,
+  type KeywordSearchSummary,
   type RentalOrder,
   type RentalOrderRaw,
   type RentalProduct,

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api } from '../api';
 import { siteLabel } from '../lib/format';
@@ -6,6 +6,7 @@ import {
   subscribeSearchJobProgress,
   type SearchJobProgressEvent,
 } from '../lib/socket';
+import type { KeywordHistoryItem } from '../types';
 
 type RentalJobSummary = {
   jobId: string;
@@ -65,7 +66,7 @@ type JobLive = {
   resultCount: number;
 };
 
-const TERMINAL = new Set(['completed', 'failed']);
+const TERMINAL = new Set(['completed', 'failed', 'partial']);
 
 function formatWhen(value?: string | null) {
   if (!value) return '—';
@@ -83,6 +84,7 @@ function formatWhen(value?: string | null) {
 
 function statusTone(status: string) {
   if (status === 'completed') return 'bg-teal-50 text-teal-800';
+  if (status === 'partial') return 'bg-amber-50 text-amber-900';
   if (status === 'failed') return 'bg-rose-50 text-rose-800';
   if (status === 'running' || status === 'queued')
     return 'bg-amber-50 text-amber-900';
@@ -108,6 +110,9 @@ export function RentalPage({
   const [order, setOrder] = useState<RentalOrderContext | null>(null);
   const [orderError, setOrderError] = useState<string | null>(null);
   const [histories, setHistories] = useState<RentalSearchHistory[]>([]);
+  const [keywordHistories, setKeywordHistories] = useState<
+    KeywordHistoryItem[]
+  >([]);
   const [investigations, setInvestigations] = useState<RentalInvestigation[]>(
     [],
   );
@@ -145,6 +150,7 @@ export function RentalPage({
     if (!selectedJobId) {
       setOrder(null);
       setHistories([]);
+      setKeywordHistories([]);
       setInvestigations([]);
       setLive(null);
       return;
@@ -159,6 +165,7 @@ export function RentalPage({
         setOrder(res.order);
         setOrderError(res.orderError);
         setHistories(res.searchHistories);
+        setKeywordHistories(res.job.keywordHistories ?? []);
         setInvestigations(res.investigations);
         setLive({
           status: res.job.status,
@@ -222,12 +229,22 @@ export function RentalPage({
         ),
       );
       if (TERMINAL.has(event.status)) {
-        void api.getRentalJob(event.jobId).then((res) => {
-          setInvestigations(res.investigations);
-          setHistories(res.searchHistories);
-          setOrder(res.order);
-          setOrderError(res.orderError);
-        }).catch(() => null);
+        void api
+          .getRentalJob(event.jobId)
+          .then((res) => {
+            setInvestigations(res.investigations);
+            setHistories(res.searchHistories);
+            setKeywordHistories(res.job.keywordHistories ?? []);
+            setOrder(res.order);
+            setOrderError(res.orderError);
+            setLive({
+              status: res.job.status,
+              progress: res.job.progress,
+              currentSite: res.job.currentSite,
+              resultCount: res.job.resultCount,
+            });
+          })
+          .catch(() => null);
       }
     };
 
@@ -236,6 +253,13 @@ export function RentalPage({
   }, [selectedJobId]);
 
   const selected = jobs.find((j) => j.jobId === selectedJobId) ?? null;
+  const jobResultCount = live?.resultCount ?? selected?.resultCount ?? 0;
+  const keywordSum = useMemo(
+    () => keywordHistories.reduce((sum, h) => sum + (h.resultCount ?? 0), 0),
+    [keywordHistories],
+  );
+  const countsDiffer =
+    keywordHistories.length > 0 && keywordSum !== jobResultCount;
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-4 animate-fadeUp">
@@ -324,7 +348,9 @@ export function RentalPage({
                           </span>
                           <span
                             className={`shrink-0 rounded-md px-1.5 py-0.5 text-[11px] ${
-                              on ? 'bg-sand-50/20 text-sand-100' : statusTone(job.status)
+                              on
+                                ? 'bg-sand-50/20 text-sand-100'
+                                : statusTone(job.status)
                             }`}
                           >
                             {job.status} {job.progress}%
@@ -415,157 +441,225 @@ export function RentalPage({
           ) : (
             <div className="space-y-6">
               {(tab === 'contracts' || tab === 'auto') && (
-              <div>
-                <p className="text-xs uppercase tracking-[0.14em] text-ink-500">
-                  Job Status
-                </p>
-                <h3 className="mt-1 font-mono text-lg text-ink-900">
-                  {selected?.orderNo ?? '—'}
-                </h3>
-                <p className="mt-0.5 font-mono text-[11px] text-ink-400">
-                  jobId={selectedJobId}
-                </p>
-                <div className="mt-3">
-                  <div className="mb-1 flex items-center justify-between text-xs text-ink-500">
-                    <span className={`rounded-md px-1.5 py-0.5 ${statusTone(live?.status || selected?.status || '')}`}>
-                      {live?.status || selected?.status}
-                    </span>
-                    <span className="tabular-nums">
-                      {live?.progress ?? selected?.progress ?? 0}% ·{' '}
-                      {live?.resultCount ?? selected?.resultCount ?? 0}건
-                      {live?.currentSite
-                        ? ` · ${siteLabel(live.currentSite)}`
-                        : ''}
-                    </span>
-                  </div>
-                  <div className="h-2 overflow-hidden rounded-full bg-sand-100">
-                    <div
-                      className="h-full rounded-full bg-teal-700 transition-all duration-500"
-                      style={{
-                        width: `${Math.min(100, live?.progress ?? selected?.progress ?? 0)}%`,
-                      }}
-                    />
+                <div>
+                  <p className="text-xs uppercase tracking-[0.14em] text-ink-500">
+                    Job Status
+                  </p>
+                  <h3 className="mt-1 font-mono text-lg text-ink-900">
+                    {selected?.orderNo ?? '—'}
+                  </h3>
+                  <p className="mt-0.5 font-mono text-[11px] text-ink-400">
+                    jobId={selectedJobId}
+                  </p>
+                  <div className="mt-3">
+                    <div className="mb-1 flex items-center justify-between text-xs text-ink-500">
+                      <span
+                        className={`rounded-md px-1.5 py-0.5 ${statusTone(live?.status || selected?.status || '')}`}
+                      >
+                        {live?.status || selected?.status}
+                      </span>
+                      <span className="tabular-nums">
+                        {live?.progress ?? selected?.progress ?? 0}% ·{' '}
+                        {jobResultCount}건
+                        <span className="ml-1 text-ink-400">
+                          (고유 매물 기준)
+                        </span>
+                        {live?.currentSite
+                          ? ` · ${siteLabel(live.currentSite)}`
+                          : ''}
+                      </span>
+                    </div>
+                    <div className="h-2 overflow-hidden rounded-full bg-sand-100">
+                      <div
+                        className="h-full rounded-full bg-teal-700 transition-all duration-500"
+                        style={{
+                          width: `${Math.min(100, live?.progress ?? selected?.progress ?? 0)}%`,
+                        }}
+                      />
+                    </div>
+                    {countsDiffer ? (
+                      <p className="mt-1.5 text-[11px] leading-relaxed text-ink-400">
+                        Job 결과 {jobResultCount}건은 고유 매물 기준입니다.
+                        키워드별 합계({keywordSum}건)와 다를 수 있으며 오류가
+                        아닙니다.
+                      </p>
+                    ) : null}
                   </div>
                 </div>
-              </div>
               )}
 
               {tab === 'contracts' && (
-              <div>
-                <p className="text-xs uppercase tracking-[0.14em] text-ink-500">
-                  주문정보 (Rental API)
-                </p>
-                {orderError && !order ? (
-                  <p className="mt-2 text-sm text-amber-800">
-                    주문 API 조회 실패: {orderError}
+                <div>
+                  <p className="text-xs uppercase tracking-[0.14em] text-ink-500">
+                    주문정보 (Rental API)
                   </p>
-                ) : order ? (
-                  <>
-                    <h4 className="mt-1 font-display text-lg text-ink-900">
-                      {order.productName}
-                    </h4>
-                    <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
-                      <InfoRow label="주문번호" value={order.orderNo} mono />
-                      <InfoRow label="계약번호" value={order.contractNo} mono />
-                      <InfoRow label="고객명" value={order.customerName} />
-                      <InfoRow label="상품번호" value={order.productNo} mono />
-                      <InfoRow label="브랜드" value={order.brand} />
-                      <InfoRow label="모델" value={order.modelName} />
-                      <InfoRow label="옵션" value={order.option} />
-                      <InfoRow label="색상" value={order.color} />
-                    </dl>
-                  </>
-                ) : (
-                  <p className="mt-2 text-sm text-ink-500">
-                    주문 컨텍스트를 불러오는 중…
-                  </p>
-                )}
-              </div>
+                  {orderError && !order ? (
+                    <p className="mt-2 text-sm text-amber-800">
+                      주문 API 조회 실패: {orderError}
+                    </p>
+                  ) : order ? (
+                    <>
+                      <h4 className="mt-1 font-display text-lg text-ink-900">
+                        {order.productName}
+                      </h4>
+                      <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
+                        <InfoRow label="주문번호" value={order.orderNo} mono />
+                        <InfoRow
+                          label="계약번호"
+                          value={order.contractNo}
+                          mono
+                        />
+                        <InfoRow label="고객명" value={order.customerName} />
+                        <InfoRow
+                          label="상품번호"
+                          value={order.productNo}
+                          mono
+                        />
+                        <InfoRow label="브랜드" value={order.brand} />
+                        <InfoRow label="모델" value={order.modelName} />
+                        <InfoRow label="옵션" value={order.option} />
+                        <InfoRow label="색상" value={order.color} />
+                      </dl>
+                    </>
+                  ) : (
+                    <p className="mt-2 text-sm text-ink-500">
+                      주문 컨텍스트를 불러오는 중…
+                    </p>
+                  )}
+                </div>
               )}
 
               {tab === 'auto' && (
-              <div>
-                <h4 className="text-sm font-medium text-ink-900">
-                  Search History
-                </h4>
-                {histories.length === 0 ? (
-                  <p className="mt-2 text-sm text-ink-500">
-                    연결된 검색 이력이 없습니다.
+                <div>
+                  <h4 className="text-sm font-medium text-ink-900">
+                    키워드별 결과
+                  </h4>
+                  <p className="mt-1 text-[11px] text-ink-400">
+                    키워드별 건수는 해당 키워드가 찾은 수입니다. Job 합계(
+                    {jobResultCount}건)는 고유 매물 기준이라 합계와 다를 수
+                    있습니다.
                   </p>
-                ) : (
-                  <ul className="mt-2 space-y-2">
-                    {histories.map((h) => (
-                      <li
-                        key={h.searchHistoryId}
-                        className="rounded-xl border border-ink-100 bg-sand-50/50 px-3 py-2.5"
-                      >
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          {onSelectSearch ? (
-                            <button
-                              type="button"
-                              onClick={() => onSelectSearch(h.searchHistoryId)}
-                              className="text-left text-sm font-medium text-teal-800 underline-offset-2 hover:underline"
+                  {keywordHistories.length === 0 ? (
+                    <p className="mt-2 text-sm text-ink-500">
+                      아직 키워드별 검색 내역이 없습니다.
+                    </p>
+                  ) : (
+                    <ul className="mt-2 space-y-2">
+                      {keywordHistories.map((h) => (
+                        <li
+                          key={h.searchHistoryId}
+                          className="rounded-xl border border-ink-100 bg-sand-50/50 px-3 py-2.5"
+                        >
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            {onSelectSearch ? (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  onSelectSearch(h.searchHistoryId)
+                                }
+                                className="text-left text-sm font-medium text-teal-800 underline-offset-2 hover:underline"
+                              >
+                                {h.keyword?.trim() ||
+                                  h.searchHistoryId.slice(0, 8)}
+                              </button>
+                            ) : (
+                              <span className="text-sm font-medium text-ink-900">
+                                {h.keyword?.trim() ||
+                                  h.searchHistoryId.slice(0, 8)}
+                              </span>
+                            )}
+                            <span
+                              className={`rounded-md px-1.5 py-0.5 text-[11px] tabular-nums ${statusTone(h.status)}`}
                             >
-                              {h.keywords.length
-                                ? h.keywords.slice(0, 3).join(' · ')
-                                : h.searchHistoryId.slice(0, 8)}
-                            </button>
-                          ) : (
-                            <span className="text-sm font-medium text-ink-900">
-                              {h.keywords.length
-                                ? h.keywords.slice(0, 3).join(' · ')
-                                : h.searchHistoryId.slice(0, 8)}
+                              {h.resultCount}건 · {h.status}
                             </span>
-                          )}
-                          <span className="text-[11px] tabular-nums text-ink-500">
-                            {h.resultCount}건 · {h.status}
-                          </span>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+
+                  {histories.length > 0 ? (
+                    <div className="mt-4">
+                      <h4 className="text-sm font-medium text-ink-900">
+                        Search History
+                      </h4>
+                      <ul className="mt-2 space-y-2">
+                        {histories.map((h) => (
+                          <li
+                            key={h.searchHistoryId}
+                            className="rounded-xl border border-ink-100 bg-sand-50/50 px-3 py-2.5"
+                          >
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              {onSelectSearch ? (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    onSelectSearch(h.searchHistoryId)
+                                  }
+                                  className="text-left text-sm font-medium text-teal-800 underline-offset-2 hover:underline"
+                                >
+                                  {h.keywords.length
+                                    ? h.keywords.slice(0, 3).join(' · ')
+                                    : h.searchHistoryId.slice(0, 8)}
+                                </button>
+                              ) : (
+                                <span className="text-sm font-medium text-ink-900">
+                                  {h.keywords.length
+                                    ? h.keywords.slice(0, 3).join(' · ')
+                                    : h.searchHistoryId.slice(0, 8)}
+                                </span>
+                              )}
+                              <span className="text-[11px] tabular-nums text-ink-500">
+                                {h.resultCount}건 · {h.status}
+                              </span>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+                </div>
               )}
 
               {tab === 'contracts' && (
-              <div>
-                <h4 className="text-sm font-medium text-ink-900">
-                  Investigation (Job 연결)
-                </h4>
-                {investigations.length === 0 ? (
-                  <p className="mt-2 text-sm text-ink-500">
-                    연결된 Investigation이 없습니다.
-                  </p>
-                ) : (
-                  <ul className="mt-2 space-y-2">
-                    {investigations.map((inv) => (
-                      <li
-                        key={inv.id}
-                        className="rounded-xl border border-ink-100 bg-sand-50/50 px-3 py-2.5"
-                      >
-                        <div className="flex flex-wrap items-start justify-between gap-2">
-                          <div>
-                            <p className="font-mono text-xs text-ink-500">
-                              {inv.caseNo}
-                            </p>
-                            <p className="text-sm text-ink-900">
-                              {inv.listingTitle || inv.productName}
-                            </p>
+                <div>
+                  <h4 className="text-sm font-medium text-ink-900">
+                    Investigation (Job 연결)
+                  </h4>
+                  {investigations.length === 0 ? (
+                    <p className="mt-2 text-sm text-ink-500">
+                      연결된 Investigation이 없습니다.
+                    </p>
+                  ) : (
+                    <ul className="mt-2 space-y-2">
+                      {investigations.map((inv) => (
+                        <li
+                          key={inv.id}
+                          className="rounded-xl border border-ink-100 bg-sand-50/50 px-3 py-2.5"
+                        >
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <div>
+                              <p className="font-mono text-xs text-ink-500">
+                                {inv.caseNo}
+                              </p>
+                              <p className="text-sm text-ink-900">
+                                {inv.listingTitle || inv.productName}
+                              </p>
+                            </div>
+                            <span className="rounded-md bg-teal-50 px-1.5 py-0.5 text-[11px] tabular-nums text-teal-800">
+                              AI {inv.aiScorePercent}%
+                            </span>
                           </div>
-                          <span className="rounded-md bg-teal-50 px-1.5 py-0.5 text-[11px] tabular-nums text-teal-800">
-                            AI {inv.aiScorePercent}%
-                          </span>
-                        </div>
-                        <p className="mt-1 text-[11px] text-ink-400">
-                          {siteLabel(inv.siteCode)} · {inv.status} ·{' '}
-                          {formatWhen(inv.createdAt)}
-                        </p>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
+                          <p className="mt-1 text-[11px] text-ink-400">
+                            {siteLabel(inv.siteCode)} · {inv.status} ·{' '}
+                            {formatWhen(inv.createdAt)}
+                          </p>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
               )}
             </div>
           )}

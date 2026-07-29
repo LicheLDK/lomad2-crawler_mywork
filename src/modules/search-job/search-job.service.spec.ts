@@ -800,6 +800,193 @@ describe('SearchJobService', () => {
       expect(job.progress).toBe(100);
     });
   });
+
+  describe('TASK A-5 API · callback keyword exposure', () => {
+    it('getOne returns keywordHistories without dropping existing fields', async () => {
+      const { service, jobRepo, jobHistoryRepo } = createService();
+      const requestedAt = new Date('2026-07-29T01:00:00.000Z');
+      const finishedAt = new Date('2026-07-29T01:05:00.000Z');
+
+      jobRepo.findOne.mockResolvedValue({
+        id: 'job-1',
+        orderNo: 'ORDER-1',
+        status: SearchJobStatus.COMPLETED,
+        requestedAt,
+        keywords: ['kw-a', 'kw-b'],
+        searchHistoryId: 'hist-a',
+        progress: 100,
+        currentSite: null,
+        resultCount: 3,
+        errorMessage: null,
+        finishedAt,
+        productName: 'Galaxy',
+        productNo: 'P-1',
+      });
+      jobHistoryRepo.find.mockResolvedValue([
+        {
+          keyword: 'kw-a',
+          status: 'completed',
+          resultCount: 2,
+          searchHistoryId: 'hist-a',
+          createdAt: requestedAt,
+        },
+        {
+          keyword: 'kw-b',
+          status: 'completed',
+          resultCount: 2,
+          searchHistoryId: 'hist-b',
+          createdAt: requestedAt,
+        },
+      ]);
+
+      const detail = await service.getOne('job-1');
+
+      expect(detail).toEqual(
+        expect.objectContaining({
+          jobId: 'job-1',
+          orderNo: 'ORDER-1',
+          status: SearchJobStatus.COMPLETED,
+          requestedAt,
+          keywords: ['kw-a', 'kw-b'],
+          searchHistoryId: 'hist-a',
+          progress: 100,
+          currentSite: null,
+          resultCount: 3,
+          errorMessage: null,
+          finishedAt,
+          productNameSnapshot: 'Galaxy',
+          productNoSnapshot: 'P-1',
+        }),
+      );
+      expect(detail.keywordHistories).toEqual([
+        {
+          keyword: 'kw-a',
+          status: 'completed',
+          resultCount: 2,
+          searchHistoryId: 'hist-a',
+        },
+        {
+          keyword: 'kw-b',
+          status: 'completed',
+          resultCount: 2,
+          searchHistoryId: 'hist-b',
+        },
+      ]);
+      // A1: 키워드 합계(4) ≠ Job resultCount(3) 가 정상
+      const keywordSum = detail.keywordHistories.reduce(
+        (s: number, h: { resultCount: number }) => s + h.resultCount,
+        0,
+      );
+      expect(keywordSum).not.toBe(detail.resultCount);
+    });
+
+    it('getProgress includes keywordHistories alongside existing fields', async () => {
+      const { service, jobHistoryRepo, progressSync } = createService();
+      progressSync.getProgress.mockResolvedValue({
+        jobId: 'job-1',
+        searchHistoryId: 'hist-a',
+        status: 'running',
+        currentSite: 'bungae',
+        progress: 40,
+        resultCount: 1,
+        message: 'crawling',
+        at: '2026-07-29T01:02:00.000Z',
+      });
+      jobHistoryRepo.find.mockResolvedValue([
+        {
+          keyword: 'kw-a',
+          status: 'running',
+          resultCount: 1,
+          searchHistoryId: 'hist-a',
+          createdAt: new Date(),
+        },
+      ]);
+
+      const progress = await service.getProgress('job-1');
+
+      expect(progress).toEqual({
+        jobId: 'job-1',
+        status: 'running',
+        currentSite: 'bungae',
+        progress: 40,
+        resultCount: 1,
+        searchHistoryId: 'hist-a',
+        message: 'crawling',
+        at: '2026-07-29T01:02:00.000Z',
+        keywordHistories: [
+          {
+            keyword: 'kw-a',
+            status: 'running',
+            resultCount: 1,
+            searchHistoryId: 'hist-a',
+          },
+        ],
+      });
+    });
+
+    it('callback payload includes keywordSummaries without removing existing fields', async () => {
+      const {
+        service,
+        jobRepo,
+        jobHistoryRepo,
+        rentalService,
+        investigationService,
+      } = createService({ mockRunSearch: false });
+
+      const finishedAt = new Date('2026-07-29T01:10:00.000Z');
+      jobRepo.findOne.mockResolvedValue({
+        id: 'job-1',
+        orderNo: 'ORDER-1',
+        status: SearchJobStatus.COMPLETED,
+        finishedAt,
+        resultCount: 3,
+        callbackSentAt: null,
+      });
+      investigationService.countBySearchJobId.mockResolvedValue(2);
+      jobHistoryRepo.find.mockResolvedValue([
+        {
+          keyword: 'kw-a',
+          status: 'completed',
+          resultCount: 2,
+          searchHistoryId: 'hist-a',
+          createdAt: new Date(),
+        },
+        {
+          keyword: 'kw-b',
+          status: 'completed',
+          resultCount: 2,
+          searchHistoryId: 'hist-b',
+          createdAt: new Date(),
+        },
+      ]);
+      rentalService.notifySearchCompleted.mockResolvedValue(true);
+
+      await (service as any).sendBackOfficeCallback('job-1');
+
+      expect(rentalService.notifySearchCompleted).toHaveBeenCalledWith({
+        jobId: 'job-1',
+        investigationCount: 2,
+        completedAt: finishedAt.toISOString(),
+        orderNo: 'ORDER-1',
+        status: 'completed',
+        resultCount: 3,
+        keywordSummaries: [
+          {
+            keyword: 'kw-a',
+            status: 'completed',
+            resultCount: 2,
+            searchHistoryId: 'hist-a',
+          },
+          {
+            keyword: 'kw-b',
+            status: 'completed',
+            resultCount: 2,
+            searchHistoryId: 'hist-b',
+          },
+        ],
+      });
+    });
+  });
 });
 
 describe('SearchJobProgressSync TASK A-4 progress aggregation', () => {

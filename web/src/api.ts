@@ -85,7 +85,9 @@ export const api = {
       searchHistoryId: string | null;
       progress: number;
       currentSite: string | null;
+      /** 고유 매물 수 (키워드별 합계와 다를 수 있음) */
       resultCount: number;
+      keywordHistories: import('./types').KeywordHistoryItem[];
     }>(`/search-jobs/${id}`),
   getSearchJobProgress: (id: string) =>
     request<{
@@ -97,6 +99,7 @@ export const api = {
       searchHistoryId: string | null;
       message?: string;
       at: string;
+      keywordHistories: import('./types').KeywordHistoryItem[];
     }>(`/search-jobs/${id}/progress`),
   listRentalJobs: (limit = 40) =>
     request<{
@@ -128,12 +131,14 @@ export const api = {
         status: string;
         progress: number;
         currentSite: string | null;
+        /** 고유 매물 수 (키워드별 합계와 다를 수 있음) */
         resultCount: number;
         searchHistoryId: string | null;
         keywords: string[];
         requestedAt: string;
         finishedAt: string | null;
         errorMessage: string | null;
+        keywordHistories: import('./types').KeywordHistoryItem[];
       };
       order: {
         orderNo: string;

@@ -51,7 +51,8 @@ export class RentalClient {
 
   /**
    * 검색 완료 Callback → BackOffice
-   * Body: jobId, investigationCount, completedAt
+   * Body: jobId, investigationCount, completedAt (+ optional keywordSummaries)
+   * 기존 필드는 유지하고 키워드별 요약만 추가한다.
    */
   async postSearchCompletedCallback(payload: {
     jobId: string;
@@ -59,6 +60,13 @@ export class RentalClient {
     completedAt: string;
     orderNo?: string | null;
     status?: 'completed' | 'partial';
+    resultCount?: number;
+    keywordSummaries?: Array<{
+      keyword: string | null;
+      status: string;
+      resultCount: number;
+      searchHistoryId: string;
+    }>;
   }): Promise<void> {
     const path =
       this.config.get<string>('rental.callbackPath') ||

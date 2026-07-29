@@ -107,6 +107,14 @@ export interface RentalSearchInput {
   customerName?: string | null;
 }
 
+/** Callback / API 공통 — 키워드별 검색 요약 */
+export interface KeywordSearchSummary {
+  keyword: string | null;
+  status: string;
+  resultCount: number;
+  searchHistoryId: string;
+}
+
 /** 검색 완료 시 BackOffice Callback 페이로드 */
 export interface SearchCompletedCallbackPayload {
   jobId: string;
@@ -115,6 +123,13 @@ export interface SearchCompletedCallbackPayload {
   orderNo?: string | null;
   /** completed | partial — Job 단위 최종 상태 */
   status?: 'completed' | 'partial';
+  /**
+   * Job 단위 고유 매물 수 (optional, additive).
+   * 키워드별 resultCount 합계와 다를 수 있음 (A1).
+   */
+  resultCount?: number;
+  /** 키워드별 검색 요약 (기존 필드 유지, 추가만) */
+  keywordSummaries?: KeywordSearchSummary[];
 }
 
 export class RentalApiError extends Error {

@@ -17,6 +17,10 @@ import {
 import { ApiKeyGuard } from '@/common/guards/api-key.guard';
 import { SearchJobService } from './search-job.service';
 import { CreateSearchJobDto } from './dto/create-search-job.dto';
+import {
+  SearchJobDetailResponseDto,
+  SearchJobProgressResponseDto,
+} from './dto/search-job-response.dto';
 
 @ApiTags('search-job')
 @ApiHeader({ name: 'x-api-key', required: true })
@@ -47,7 +51,7 @@ export class SearchJobController {
   @Get('rental/jobs/:jobId')
   @ApiOperation({
     summary:
-      'Rental Page — Job 상세 (Order via Rental API · History · Investigation)',
+      'Rental Page — Job 상세 (Order via Rental API · History · Investigation). job.keywordHistories 포함',
   })
   getRentalJobDetail(@Param('jobId', ParseUUIDPipe) jobId: string) {
     return this.searchJobService.getRentalJobDetail(jobId);
@@ -55,14 +59,29 @@ export class SearchJobController {
 
   @Get(':id/progress')
   @ApiOperation({
-    summary: 'Search Job 진행률 (Status · Current Site · Progress · Result Count)',
+    summary:
+      'Search Job 진행률 (Status · Current Site · Progress · Result Count · keywordHistories)',
+  })
+  @ApiResponse({
+    status: 200,
+    description:
+      '기존 필드 유지 + keywordHistories. resultCount는 고유 매물 기준(키워드별 합계와 다를 수 있음)',
+    type: SearchJobProgressResponseDto,
   })
   getProgress(@Param('id', ParseUUIDPipe) id: string) {
     return this.searchJobService.getProgress(id);
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Search Job 상태 조회' })
+  @ApiOperation({
+    summary: 'Search Job 상태 조회 (키워드별 내역 keywordHistories 포함)',
+  })
+  @ApiResponse({
+    status: 200,
+    description:
+      '기존 필드 유지 + keywordHistories. resultCount는 고유 매물 수(키워드별 합계와 다를 수 있음)',
+    type: SearchJobDetailResponseDto,
+  })
   getOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.searchJobService.getOne(id);
   }
