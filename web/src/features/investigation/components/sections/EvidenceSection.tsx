@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { resolveAssetUrl } from '../../../../api';
 import { formatTime } from '../../../../lib/format';
+import { EVIDENCE_KIND_LABEL } from '../../lib/evidence';
 import { deleteInvestigationEvidence } from '../../lib/store';
 import type {
   EvidenceKind,
@@ -51,41 +52,41 @@ function handleDownload(item: InvestigationEvidence, caseNo: string) {
 
   if (item.kind === 'original_url') {
     if (!value) {
-      toast('????? URL? ????.');
+      toast('원본 URL이 없습니다.');
       return;
     }
     downloadText(`${stamp}-url.txt`, value, 'text/plain;charset=utf-8');
-    toast('?? URL? ????????.');
+    toast('원본 URL을 다운로드했습니다.');
     return;
   }
 
   if (item.kind === 'ocr') {
     if (!value) {
-      toast('OCR ???? ????.');
+      toast('OCR 내용이 없습니다.');
       return;
     }
     downloadText(`${stamp}-ocr.txt`, value, 'text/plain;charset=utf-8');
-    toast('OCR? ????????.');
+    toast('OCR을 다운로드했습니다.');
     return;
   }
 
   if (item.kind === 'html_snapshot') {
     if (!value) {
-      toast('HTML Snapshot? ????.');
+      toast('HTML Snapshot이 없습니다.');
       return;
     }
     downloadText(`${stamp}-snapshot.html`, value, 'text/html;charset=utf-8');
-    toast('HTML Snapshot? ????????.');
+    toast('HTML Snapshot을 다운로드했습니다.');
     return;
   }
 
   if (!value) {
-    toast('???? ????.');
+    toast('이미지가 없습니다.');
     return;
   }
   const src = resolveAssetUrl(value) || value;
   downloadUrl(src, `${stamp}-${item.kind}.jpg`);
-  toast('???? ????????.');
+  toast('이미지를 다운로드했습니다.');
 }
 
 export function InvestigationEvidencePanel({
@@ -100,7 +101,7 @@ export function InvestigationEvidencePanel({
   function onDelete(item: InvestigationEvidence) {
     if (readOnly) return;
     deleteInvestigationEvidence(row.id, item.id);
-    toast('Evidence? ??????.');
+    toast('Evidence를 삭제했습니다.');
   }
 
   return (
@@ -112,11 +113,13 @@ export function InvestigationEvidencePanel({
       <ul className="space-y-2">
         {items.length === 0 ? (
           <li className="rounded-xl border border-dashed border-ink-200 bg-white px-4 py-6 text-center text-sm text-ink-400">
-            ??? Evidence? ????.
+            저장된 Evidence가 없습니다.
           </li>
         ) : (
           items.map((item) => {
             const Icon = KIND_ICON[item.kind] ?? FileText;
+            const label =
+              EVIDENCE_KIND_LABEL[item.kind] ?? item.label ?? item.kind;
             const preview =
               item.kind === 'original_url' ||
               item.kind === 'ocr' ||
@@ -135,11 +138,9 @@ export function InvestigationEvidencePanel({
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <p className="text-sm font-medium text-ink-900">
-                        {item.label}
-                      </p>
+                      <p className="text-sm font-medium text-ink-900">{label}</p>
                       <span className="text-[11px] tabular-nums text-ink-400">
-                        ?? ? {formatTime(item.savedAt)}
+                        저장 · {formatTime(item.savedAt)}
                       </span>
                     </div>
 
@@ -157,11 +158,11 @@ export function InvestigationEvidencePanel({
                       <p className="mt-1 line-clamp-2 break-all text-xs text-ink-500">
                         {item.kind === 'screenshot' ||
                         item.kind === 'product_image'
-                          ? '??? ??'
+                          ? '저장된 이미지'
                           : preview}
                       </p>
                     ) : (
-                      <p className="mt-1 text-xs text-ink-400">??? ??</p>
+                      <p className="mt-1 text-xs text-ink-400">내용 없음</p>
                     )}
 
                     <div className="mt-2.5 flex gap-2">
@@ -171,7 +172,7 @@ export function InvestigationEvidencePanel({
                         className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 bg-white px-2.5 py-1.5 text-xs font-medium text-ink-700 transition hover:bg-sand-50"
                       >
                         <Download className="h-3.5 w-3.5" />
-                        ????
+                        다운로드
                       </button>
                       {!readOnly ? (
                         <button
@@ -180,7 +181,7 @@ export function InvestigationEvidencePanel({
                           className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-white px-2.5 py-1.5 text-xs font-medium text-rose-700 transition hover:bg-rose-50"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
-                          ??
+                          삭제
                         </button>
                       ) : null}
                     </div>

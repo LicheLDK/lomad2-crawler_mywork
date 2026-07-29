@@ -25,7 +25,9 @@
     "migration:baseline:mark": "ts-node -r tsconfig-paths/register src/database/scripts/mark-baseline-migrated.ts",
     "postinstall": "playwright install chromium || true",
     "backup": "powershell -ExecutionPolicy Bypass -File scripts/backup-source.ps1",
+    "reset:dev-data": "powershell -ExecutionPolicy Bypass -File scripts/reset-dev-data.ps1",
     "infra:up": "docker compose up -d postgres redis elastic",
+    "infra:up:light": "docker compose up -d postgres redis",
     "infra:down": "docker compose stop postgres redis elastic",
     "web:lint": "npm --prefix web run lint",
     "web:lint:ci": "npm --prefix web run lint -- --max-warnings 29",
@@ -38,7 +40,9 @@
     "pm2:stop": "pm2 stop ecosystem.config.js",
     "pm2:logs": "pm2 logs",
     "dev:all": "concurrently -k -n api,worker,web -c teal,magenta,cyan \"npm run start:dev:api\" \"npm run start:worker:dev\" \"npm run web:dev\"",
+    "dev:light:apps": "concurrently -k -n api,web -c teal,cyan \"npm run start:dev:api\" \"npm run web:dev\"",
     "dev": "npm run infra:up && npm run dev:all",
+    "dev:light": "npm run infra:up:light && npm run dev:light:apps",
     "dev:ps": "powershell -ExecutionPolicy Bypass -File scripts/dev.ps1"
   },
   "dependencies": {

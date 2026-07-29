@@ -4,10 +4,14 @@ cd /d "%~dp0"
 
 if "%~1"=="" goto :dev
 if /i "%~1"=="dev" goto :dev
+if /i "%~1"=="light" goto :light
+if /i "%~1"=="lite" goto :light
+if /i "%~1"=="l" goto :light
 if /i "%~1"=="all" goto :all
 if /i "%~1"=="infra" goto :infra
 if /i "%~1"=="up" goto :infra
 if /i "%~1"=="down" goto :down
+if /i "%~1"=="reset" goto :reset
 if /i "%~1"=="api" goto :api
 if /i "%~1"=="worker" goto :worker
 if /i "%~1"=="web" goto :web
@@ -24,6 +28,11 @@ echo [r] infra + API + Worker + Web
 call npm run dev
 exit /b %ERRORLEVEL%
 
+:light
+echo [r] light: postgres+redis + API + Web ^(no elastic, no worker^)
+call npm run dev:light
+exit /b %ERRORLEVEL%
+
 :all
 echo [r] API + Worker + Web (infra skip)
 call npm run dev:all
@@ -37,6 +46,11 @@ exit /b %ERRORLEVEL%
 :down
 echo [r] docker infra down
 call npm run infra:down
+exit /b %ERRORLEVEL%
+
+:reset
+echo [r] wipe local search/test data ^(DB + ES + Redis^)
+call npm run reset:dev-data -- %2 %3 %4
 exit /b %ERRORLEVEL%
 
 :api
@@ -59,9 +73,11 @@ echo.
 echo Usage: r [command]
 echo.
 echo   (none) / dev   infra + API + Worker + Web   ^(npm run dev^)
+echo   light / lite / l  postgres+redis + API + Web ^(no elastic/worker^)
 echo   all            API + Worker + Web only      ^(npm run dev:all^)
 echo   infra / up     postgres redis elastic up
 echo   down           infra stop
+echo   reset          wipe search/test data ^(YES confirm; -Force ok^)
 echo   api            API watch only
 echo   worker         Worker only
 echo   web            Vite dashboard only

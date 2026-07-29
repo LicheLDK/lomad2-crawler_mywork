@@ -254,4 +254,34 @@ export class ElasticService implements OnModuleInit {
       );
     }
   }
+
+  /** listing UUID(_id) 단위 삭제. 공유 키워드 캐시를 통째로 지우지 않는다. */
+  async deleteByIds(ids: string[]): Promise<number> {
+    const unique = [...new Set(ids.filter(Boolean))];
+    if (unique.length === 0) return 0;
+    let deleted = 0;
+    for (const id of unique) {
+      try {
+        await this.client.delete({
+          index: this.index,
+          id,
+          refresh: true,
+        });
+        deleted += 1;
+      } catch (error) {
+        const statusCode =
+          error &&
+          typeof error === 'object' &&
+          'meta' in error &&
+          (error as { meta?: { statusCode?: number } }).meta?.statusCode;
+        if (statusCode === 404) continue;
+        this.logger.warn(
+          `Elastic delete id=${id} failed: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      }
+    }
+    return deleted;
+  }
 }

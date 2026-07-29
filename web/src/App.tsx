@@ -73,6 +73,7 @@ export default function App() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [progress, setProgress] = useState<CrawlProgressEvent | null>(null);
   const [activeSearchId, setActiveSearchId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const pollRef = useRef<number | null>(null);
   const unsubRef = useRef<(() => void) | null>(null);
 
@@ -297,6 +298,27 @@ export default function App() {
     void onSelectSearch(id);
   }
 
+  async function onDeleteSearch(id: string) {
+    setDeletingId(id);
+    setError(null);
+    try {
+      await api.deleteSearch(id);
+      if (detail?.searchId === id || activeSearchId === id) {
+        stopPoll();
+        stopProgressSocket();
+        setDetail(null);
+        setActiveSearchId(null);
+        setProgress(null);
+        setBusy(false);
+      }
+      await refreshMeta();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
   const queue = health?.info?.queue ?? stats?.queue ?? null;
   const workerCount = queue?.active ?? 0;
   const queueCount = (queue?.waiting ?? 0) + (queue?.delayed ?? 0);
@@ -362,6 +384,8 @@ export default function App() {
               aiUsageToday={aiUsageToday}
               activeId={detail?.searchId ?? activeSearchId}
               onSelectSearch={onSelectSearchFromHistory}
+              onDeleteSearch={onDeleteSearch}
+              deletingId={deletingId}
             />
           }
         />
@@ -384,6 +408,8 @@ export default function App() {
                     stats={stats}
                     activeId={detail?.searchId ?? activeSearchId}
                     onSelectSearch={onSelectSearch}
+                    onDeleteSearch={onDeleteSearch}
+                    deletingId={deletingId}
                   />
                 </div>
 
@@ -393,6 +419,8 @@ export default function App() {
                       stats={stats}
                       activeId={detail?.searchId ?? activeSearchId}
                       onSelectSearch={onSelectSearch}
+                      onDeleteSearch={onDeleteSearch}
+                      deletingId={deletingId}
                     />
                   </div>
                   <div className="space-y-5">
@@ -427,6 +455,8 @@ export default function App() {
                 stats={stats}
                 activeId={detail?.searchId ?? activeSearchId}
                 onSelectSearch={onSelectSearchFromHistory}
+                onDeleteSearch={onDeleteSearch}
+                deletingId={deletingId}
               />
             </div>
           }

@@ -33,17 +33,17 @@ const EVENT_META: Record<
     Icon: typeof Search;
   }
 > = {
-  search_run: { label: '??', tone: 'sky', Icon: Search },
+  search_run: { label: '검색', tone: 'sky', Icon: Search },
   ai_analysis: { label: 'AI', tone: 'amber', Icon: Bot },
   investigation_created: {
-    label: '??',
+    label: '생성',
     tone: 'teal',
     Icon: FolderPlus,
   },
-  assignee_set: { label: '??', tone: 'sky', Icon: UserPlus },
-  note_added: { label: '??', tone: 'default', Icon: NotebookPen },
+  assignee_set: { label: '담당', tone: 'sky', Icon: UserPlus },
+  note_added: { label: '메모', tone: 'default', Icon: NotebookPen },
   status_changed: {
-    label: '??',
+    label: '상태',
     tone: 'amber',
     Icon: ClipboardList,
   },
@@ -53,17 +53,17 @@ const EVENT_META: Record<
     Icon: FileSearch,
   },
   final_decision: {
-    label: '??',
+    label: '판정',
     tone: 'emerald',
     Icon: CheckCircle2,
   },
-  completed: { label: '??', tone: 'emerald', Icon: CheckCircle2 },
+  completed: { label: '완료', tone: 'emerald', Icon: CheckCircle2 },
 };
 
 function eventMeta(kind: TimelineEventKind | undefined) {
   if (kind && EVENT_META[kind]) return EVENT_META[kind];
   return {
-    label: '???',
+    label: '기타',
     tone: 'teal' as const,
     Icon: ShieldCheck,
   };
@@ -74,7 +74,7 @@ export function InvestigationTimeline({
 }: {
   events: InvestigationTimelineEvent[];
 }) {
-  /** chronological: oldest ? newest */
+  /** chronological: oldest → newest */
   const list = [...events].sort(
     (a, b) => new Date(a.at).getTime() - new Date(b.at).getTime(),
   );
@@ -90,7 +90,7 @@ export function InvestigationTimeline({
 
       {list.length === 0 ? (
         <div className="rounded-xl border border-dashed border-ink-200 bg-white px-4 py-6 text-center text-sm text-ink-400">
-          ???? ???? ????.
+          타임라인 기록이 없습니다.
         </div>
       ) : (
         <Timeline>

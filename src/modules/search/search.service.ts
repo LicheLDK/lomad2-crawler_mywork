@@ -4,8 +4,10 @@ import { Repository } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import {
   CrawlerResult,
+  InvestigationCaseEntity,
   SearchHistory,
   SearchHistoryResult,
+  SearchJob,
   SearchKeyword,
   SearchStatus,
 } from '@/database/entities';
@@ -33,6 +35,10 @@ export class SearchService {
     private readonly resultRepo: Repository<CrawlerResult>,
     @InjectRepository(SearchHistoryResult)
     private readonly historyResultRepo: Repository<SearchHistoryResult>,
+    @InjectRepository(SearchJob)
+    private readonly jobRepo: Repository<SearchJob>,
+    @InjectRepository(InvestigationCaseEntity)
+    private readonly investigationRepo: Repository<InvestigationCaseEntity>,
     private readonly elastic: ElasticService,
     private readonly crawlQueue: CrawlQueueService,
     private readonly cache: CacheService,
@@ -209,6 +215,82 @@ export class SearchService {
           ? history.requestMeta.referenceImageUrl
           : null,
       results,
+    };
+  }
+
+  /**
+   * 검색 이력 단건 삭제.
+   * - Investigation: 해당 history 케이스 삭제
+   * - SearchJob: searchHistoryId만 null (주문 job 자체는 유지)
+   * - search_history_results: history CASCADE
+   * - orphan crawler_result(+image_hash) 및 ES _id만 정리
+   * - Redis search:job:{id}
+   */
+  async deleteSearch(id: string) {
+    const history = await this.historyRepo.findOne({ where: { id } });
+    if (!history) {
+      throw new NotFoundException(`Search not found: ${id}`);
+    }
+
+    const links = await this.historyResultRepo.find({
+      where: { searchHistoryId: id },
+    });
+    const linkedResultIds = [...new Set(links.map((l) => l.resultId))];
+
+    const investigationResult = await this.investigationRepo.delete({
+      searchHistoryId: id,
+    });
+    const deletedInvestigations = investigationResult.affected ?? 0;
+
+    const jobResult = await this.jobRepo.update(
+      { searchHistoryId: id },
+      { searchHistoryId: null },
+    );
+    const clearedJobs = jobResult.affected ?? 0;
+
+    await this.historyRepo.delete({ id });
+
+    const orphanIds: string[] = [];
+    for (const resultId of linkedResultIds) {
+      const stillLinked = await this.historyResultRepo.exist({
+        where: { resultId },
+      });
+      if (!stillLinked) {
+        orphanIds.push(resultId);
+      }
+    }
+
+    let orphanListingsDeleted = 0;
+    if (orphanIds.length > 0) {
+      const del = await this.resultRepo.delete(orphanIds);
+      orphanListingsDeleted = del.affected ?? 0;
+      await this.elastic.deleteByIds(orphanIds);
+    }
+
+    await this.cache.deleteSearchJob(id);
+
+    const normalizedKeyword = normalizeKeyword(history.keyword);
+    const remainingForKeyword = await this.historyRepo
+      .createQueryBuilder('h')
+      .where(
+        `LOWER(REGEXP_REPLACE(TRIM(h.keyword), '\\s+', ' ', 'g')) = :kw`,
+        { kw: normalizedKeyword },
+      )
+      .getCount();
+    if (remainingForKeyword === 0) {
+      await this.keywordRepo.delete({ keyword: normalizedKeyword });
+    }
+
+    this.logger.log(
+      `Deleted search=${id} investigations=${deletedInvestigations} jobsCleared=${clearedJobs} orphans=${orphanListingsDeleted}`,
+    );
+
+    return {
+      success: true,
+      searchId: id,
+      deletedInvestigations,
+      clearedJobs,
+      orphanListingsDeleted,
     };
   }
 

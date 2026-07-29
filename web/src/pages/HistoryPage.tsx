@@ -27,6 +27,11 @@ function loadIdList(key: string): string[] {
   }
 }
 
+function removeIdFromList(key: string, id: string) {
+  const next = loadIdList(key).filter((x) => x !== id);
+  localStorage.setItem(key, JSON.stringify(next));
+}
+
 function pickByIds(
   recent: SearchHistoryItem[],
   ids: string[],
@@ -41,10 +46,14 @@ export function HistoryPage({
   stats,
   activeId,
   onSelectSearch,
+  onDeleteSearch,
+  deletingId = null,
 }: {
   stats: StatsOverview | null;
   activeId?: string | null;
   onSelectSearch: (id: string) => void;
+  onDeleteSearch?: (id: string) => void | Promise<void>;
+  deletingId?: string | null;
 }) {
   const [tab, setTab] = useState<HistoryTab>('recent');
   const recent = stats?.recentSearches ?? [];
@@ -62,6 +71,17 @@ export function HistoryPage({
         ? '저장된 검색이 없습니다.'
         : '즐겨찾기한 검색이 없습니다.';
 
+  async function handleDelete(id: string) {
+    if (!onDeleteSearch) return;
+    const ok = window.confirm(
+      '이 검색 이력을 삭제할까요?\n연결된 조사 케이스도 함께 삭제되고, 다른 이력과 공유하지 않는 매물만 정리됩니다.',
+    );
+    if (!ok) return;
+    await onDeleteSearch(id);
+    removeIdFromList(SAVED_KEY, id);
+    removeIdFromList(FAVORITE_KEY, id);
+  }
+
   return (
     <section className="animate-fadeUp rounded-2xl border border-ink-100/80 bg-white/75 p-4 shadow-soft backdrop-blur sm:p-5">
       <div>
@@ -69,6 +89,11 @@ export function HistoryPage({
           History
         </p>
         <h2 className="font-display text-xl text-ink-900">검색 이력</h2>
+        <p className="mt-1 text-[11px] leading-relaxed text-ink-400">
+          삭제 시 서버 이력·연관 Investigation이 제거됩니다. 로컬 테스트 전체
+          초기화는 <code className="rounded bg-sand-100 px-1">r reset</code>을
+          사용하세요.
+        </p>
       </div>
 
       <div className="mt-4 flex flex-wrap gap-1 rounded-xl border border-ink-100 bg-sand-50/60 p-1">
@@ -96,6 +121,8 @@ export function HistoryPage({
           items={items}
           activeId={activeId}
           onSelectSearch={onSelectSearch}
+          onDeleteSearch={onDeleteSearch ? handleDelete : undefined}
+          deletingId={deletingId}
           loading={!stats}
           emptyMessage={emptyMessage}
         />

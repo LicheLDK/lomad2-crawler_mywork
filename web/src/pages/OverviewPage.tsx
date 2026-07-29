@@ -14,12 +14,16 @@ export function OverviewPage({
   aiUsageToday,
   activeId,
   onSelectSearch,
+  onDeleteSearch,
+  deletingId = null,
 }: {
   stats: StatsOverview | null;
   health: HealthPayload | null;
   aiUsageToday: AiUsageToday | null;
   activeId?: string | null;
   onSelectSearch: (id: string) => void;
+  onDeleteSearch?: (id: string) => void | Promise<void>;
+  deletingId?: string | null;
 }) {
   const queue = health?.info?.queue ?? stats?.queue ?? null;
   const workerActive = queue?.active ?? 0;
@@ -89,6 +93,8 @@ export function OverviewPage({
             stats={stats}
             activeId={activeId}
             onSelectSearch={onSelectSearch}
+            onDeleteSearch={onDeleteSearch}
+            deletingId={deletingId}
           />
         </div>
         <div className="min-h-0 space-y-5 overflow-y-auto overscroll-contain">

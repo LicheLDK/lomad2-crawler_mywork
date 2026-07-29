@@ -59,14 +59,14 @@ export function InvestigationAssignmentPanel({
     if (locked) return;
     const updated = updateInvestigationAssignment(row.id, patch);
     if (!updated) {
-      toast('??? ??? ??? ? ????.');
+      toast('담당을 변경할 수 없습니다.');
       return;
     }
     if (patch.assignee !== undefined && patch.assignee !== row.assignee) {
       toast(
         patch.assignee
-          ? `???? ${patch.assignee}(?)? ???????.`
-          : '??? ??? ???????.',
+          ? `담당자를 ${patch.assignee}(으)로 지정했습니다.`
+          : '담당자를 해제했습니다.',
       );
     }
   }
@@ -88,7 +88,7 @@ export function InvestigationAssignmentPanel({
             className="block text-xs text-ink-400"
             htmlFor={`assignee-${row.id}`}
           >
-            ???
+            담당자
           </label>
           <select
             id={`assignee-${row.id}`}
@@ -99,7 +99,7 @@ export function InvestigationAssignmentPanel({
             }
             className="mt-1 w-full rounded-xl border border-ink-200 bg-white px-3 py-2.5 text-sm text-ink-800 outline-none transition focus:border-teal-600 focus:ring-2 focus:ring-teal-600/20 disabled:cursor-not-allowed disabled:bg-sand-50"
           >
-            <option value="">???</option>
+            <option value="">미지정</option>
             {assigneeOptions.map((name) => (
               <option key={name} value={name}>
                 {name}
@@ -109,7 +109,7 @@ export function InvestigationAssignmentPanel({
         </div>
 
         <div>
-          <p className="text-xs text-ink-400">????</p>
+          <p className="text-xs text-ink-400">우선순위</p>
           <div className="mt-2 flex flex-wrap gap-2">
             {INVESTIGATION_PRIORITIES.map((p) => {
               const active = (priority ?? 'Medium') === p;
@@ -141,7 +141,7 @@ export function InvestigationAssignmentPanel({
             className="block text-xs text-ink-400"
             htmlFor={`due-${row.id}`}
           >
-            ???
+            마감일
           </label>
           <input
             id={`due-${row.id}`}
@@ -155,7 +155,7 @@ export function InvestigationAssignmentPanel({
           />
           {row.dueDate ? (
             <p className="mt-1.5 text-[11px] text-ink-400">
-              ?? ? {formatDateShort(row.dueDate)}
+              마감 · {formatDateShort(row.dueDate)}
             </p>
           ) : null}
         </div>
@@ -163,7 +163,7 @@ export function InvestigationAssignmentPanel({
         {locked ? (
           <p className="inline-flex items-center gap-1.5 text-xs text-ink-500">
             <Lock className="h-3.5 w-3.5" />
-            Completed ???? ???? ??? ? ????
+            Completed 이후에는 담당을 수정할 수 없습니다
           </p>
         ) : null}
       </div>

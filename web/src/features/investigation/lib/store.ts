@@ -1,8 +1,5 @@
 import type { SearchResult } from '../../../types';
 import type {
-  
-} from '../types';
-import type {
   InvestigationAiAnalysis,
   InvestigationCase,
   InvestigationNote,
@@ -16,6 +13,9 @@ import {
   appendTimelineEvent,
   buildDefaultEvidence,
   buildDefaultTimeline,
+  looksMojibake,
+  repairEvidenceLabel,
+  repairTimelineEvent,
 } from './evidence';
 import {
   canTransitionStatus,
@@ -42,7 +42,7 @@ function migrateNotes(row: InvestigationCase): InvestigationNote[] {
       {
         id: `legacy-note-${row.id}`,
         body: row.notes.trim(),
-        author: row.assignee?.trim() || '???',
+        author: row.assignee?.trim() || '미지정',
         createdAt: at,
         updatedAt: at,
       },
@@ -124,7 +124,7 @@ export function nextCaseNumber(): string {
 function normalizeCase(row: InvestigationCase): InvestigationCase {
   const aiScore = row.aiScore ?? 0;
   const noteEntries = migrateNotes(row);
-  // legacy Cancelled ? Archived
+  // legacy Cancelled → Archived
   const rawStatus = (row.status as string) === 'Cancelled' ? 'Archived' : row.status;
   const base: InvestigationCase = {
     ...row,
@@ -147,8 +147,9 @@ function normalizeCase(row: InvestigationCase): InvestigationCase {
       null,
   };
 
-  const evidence =
-    row.evidence != null ? row.evidence : buildDefaultEvidence(base);
+  const evidence = (
+    row.evidence != null ? row.evidence : buildDefaultEvidence(base)
+  ).map(repairEvidenceLabel);
 
   const withEvidence = { ...base, evidence };
 
@@ -157,13 +158,17 @@ function normalizeCase(row: InvestigationCase): InvestigationCase {
     row.timeline.length === 0 ||
     row.timeline.some((e) => !e.kind);
 
+  const timeline = timelineNeedsRebuild
+    ? buildDefaultTimeline(withEvidence)
+    : row.timeline.map(repairTimelineEvent);
+
   return {
     ...withEvidence,
-    timeline: timelineNeedsRebuild
-      ? buildDefaultTimeline(withEvidence)
-      : row.timeline,
+    timeline,
     evidence,
-    noteEntries,
+    noteEntries: noteEntries.map((n) =>
+      looksMojibake(n.author) ? { ...n, author: '미지정' } : n,
+    ),
   };
 }
 
@@ -175,7 +180,27 @@ export function loadInvestigationCases(): InvestigationCase[] {
     }
     const raw = JSON.parse(localStorage.getItem(CASES_KEY) || '[]') as unknown;
     if (!Array.isArray(raw)) return [];
-    return (raw as InvestigationCase[]).map(normalizeCase);
+    const before = raw as InvestigationCase[];
+    const normalized = before.map(normalizeCase);
+    const needsPersist = before.some((row, i) => {
+      const next = normalized[i];
+      const evBroken = (row.evidence ?? []).some((e) => looksMojibake(e.label));
+      const tlBroken = (row.timeline ?? []).some((e) => looksMojibake(e.title));
+      return (
+        evBroken ||
+        tlBroken ||
+        JSON.stringify(row.evidence) !== JSON.stringify(next.evidence) ||
+        JSON.stringify(row.timeline) !== JSON.stringify(next.timeline)
+      );
+    });
+    if (needsPersist) {
+      try {
+        localStorage.setItem(CASES_KEY, JSON.stringify(normalized));
+      } catch {
+        /* ignore quota */
+      }
+    }
+    return normalized;
   } catch {
     return [];
   }
@@ -217,8 +242,8 @@ export function changeInvestigationStatus(
   let timeline = appendTimelineEvent(
     current.timeline,
     'status_changed',
-    '?? ??',
-    `${current.status} ? ${nextStatus}`,
+    '상태 변경',
+    `${current.status} → ${nextStatus}`,
     now,
   );
 
@@ -226,8 +251,8 @@ export function changeInvestigationStatus(
     timeline = appendTimelineEvent(
       timeline,
       'completed',
-      '?? ??',
-      `${current.caseNo} ?? ??`,
+      '완료 처리',
+      `${current.caseNo} 완료 처리`,
       now,
     );
   }
@@ -237,7 +262,7 @@ export function changeInvestigationStatus(
       timeline,
       'completed',
       'Archived',
-      `${current.caseNo} ?? ??`,
+      `${current.caseNo} 보관`,
       now,
     );
   }
@@ -253,13 +278,13 @@ export function changeInvestigationStatus(
 }
 
 const FINAL_DECISION_LABEL: Record<FinalDecision, string> = {
-  resale_confirmed: '??? ??',
-  further_investigation: '?? ??',
-  false_positive: '??',
-  excluded: '??',
+  resale_confirmed: '재판매 확인',
+  further_investigation: '추가 조사',
+  false_positive: '오탐',
+  excluded: '제외',
 };
 
-/** Final Decision ? Completed + Timeline ?? */
+/** Final Decision → Completed + Timeline */
 export function applyFinalDecision(
   caseId: string,
   decision: FinalDecision,
@@ -279,8 +304,8 @@ export function applyFinalDecision(
     timeline = appendTimelineEvent(
       timeline,
       'status_changed',
-      '?? ??',
-      `${current.status} ? Completed`,
+      '상태 변경',
+      `${current.status} → Completed`,
       now,
     );
   }
@@ -296,8 +321,8 @@ export function applyFinalDecision(
   timeline = appendTimelineEvent(
     timeline,
     'completed',
-    '?? ??',
-    `${current.caseNo} � ${label}`,
+    '완료 처리',
+    `${current.caseNo} · ${label}`,
     now,
   );
 
@@ -338,13 +363,13 @@ export function updateInvestigationAssignment(
   ) {
     const detail = patch.assignee
       ? current.assignee
-        ? `${current.assignee} ? ${patch.assignee}`
+        ? `${current.assignee} → ${patch.assignee}`
         : patch.assignee
-      : `${current.assignee || '???'} ? ???`;
+      : `${current.assignee || '미지정'} → 미지정`;
     timeline = appendTimelineEvent(
       current.timeline,
       'assignee_set',
-      '??? ??',
+      '담당자 지정',
       detail,
       now,
     );
@@ -398,7 +423,7 @@ export function addInvestigationNote(
   const note: InvestigationNote = {
     id: uid('note'),
     body,
-    author: author.trim() || '???',
+    author: author.trim() || '미지정',
     createdAt: now,
     updatedAt: now,
   };
@@ -438,7 +463,7 @@ export function updateInvestigationNote(
     timeline = appendTimelineEvent(
       current.timeline,
       'note_added',
-      '?? ??',
+      '메모 작성',
       body.trim().slice(0, 80),
       now,
     );

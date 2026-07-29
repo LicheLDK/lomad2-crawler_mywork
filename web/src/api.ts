@@ -59,6 +59,14 @@ export const api = {
     ),
   getSearch: (id: string) =>
     request<import('./types').SearchDetail>(`/search/${id}`),
+  deleteSearch: (id: string) =>
+    request<{
+      success: boolean;
+      searchId: string;
+      deletedInvestigations: number;
+      clearedJobs: number;
+      orphanListingsDeleted: number;
+    }>(`/search/${id}`, { method: 'DELETE' }),
   createSearchJob: (body: unknown) =>
     request<{
       jobId: string;

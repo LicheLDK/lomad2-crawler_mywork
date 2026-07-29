@@ -44,6 +44,10 @@ export default {
           '0%': { opacity: '0', transform: 'translateY(8px)' },
           '100%': { opacity: '1', transform: 'translateY(0)' },
         },
+        fadeOutSoft: {
+          '0%': { opacity: '1', transform: 'translateY(0)' },
+          '100%': { opacity: '0', transform: 'translateY(-8px)' },
+        },
         pulseSoft: {
           '0%, 100%': { opacity: '1' },
           '50%': { opacity: '0.55' },
@@ -51,6 +55,7 @@ export default {
       },
       animation: {
         fadeUp: 'fadeUp 0.45s ease-out both',
+        fadeOutSoft: 'fadeOutSoft 0.4s ease-in both',
         pulseSoft: 'pulseSoft 1.6s ease-in-out infinite',
       },
     },

@@ -24,10 +24,10 @@ export function InvestigationWorkflowPanel({
     if (next === row.status) return;
     const updated = changeInvestigationStatus(row.id, next);
     if (!updated) {
-      toast('?? ??? ???? ????.');
+      toast('상태 변경이 허용되지 않습니다.');
       return;
     }
-    toast(`??? ${next}(?)? ???????.`);
+    toast(`상태를 ${next}(으)로 변경했습니다.`);
   }
 
   return (
@@ -43,11 +43,11 @@ export function InvestigationWorkflowPanel({
 
       <div className="rounded-xl border border-ink-100 bg-white p-4">
         <p className="mb-3 text-[11px] leading-relaxed text-ink-400">
-          Open ? Investigating ? Review ? Completed ? Archived
+          Open → Investigating → Review → Completed → Archived
         </p>
 
         <label className="block text-xs text-ink-400" htmlFor={`wf-${row.id}`}>
-          ??
+          현재
         </label>
         <select
           id={`wf-${row.id}`}
@@ -59,7 +59,7 @@ export function InvestigationWorkflowPanel({
           {options.map((s) => (
             <option key={s} value={s}>
               {s}
-              {s === row.status ? ' (??)' : ''}
+              {s === row.status ? ' (현재)' : ''}
             </option>
           ))}
         </select>
@@ -67,9 +67,9 @@ export function InvestigationWorkflowPanel({
         {locked ? (
           <p className="mt-3 inline-flex items-center gap-1.5 text-xs text-ink-500">
             <Lock className="h-3.5 w-3.5" />
-            Completed ???? ??? ? ????
+            Completed 이후에는 수정할 수 없습니다
             {row.status === 'Completed' && !statusLocked
-              ? ' ? Archived?? ?? ??'
+              ? ' · Archived로만 이동 가능'
               : null}
           </p>
         ) : null}

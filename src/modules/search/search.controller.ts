@@ -1,5 +1,6 @@
 import {
   Controller,
+  Delete,
   Get,
   Param,
   ParseUUIDPipe,
@@ -39,6 +40,16 @@ export class SearchController {
   @ApiOperation({ summary: '검색 이력/상태 조회' })
   getOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.searchService.getSearch(id);
+  }
+
+  @Delete('search/:id')
+  @ApiOperation({
+    summary:
+      '검색 이력 삭제 (연관 Investigation 삭제, SearchJob 연결 해제, orphan 매물 정리)',
+  })
+  @ApiResponse({ status: 200, description: '삭제 완료' })
+  remove(@Param('id', ParseUUIDPipe) id: string) {
+    return this.searchService.deleteSearch(id);
   }
 
   @Get('result')

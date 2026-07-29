@@ -1,6 +1,6 @@
 import type { InvestigationStatus } from '../types';
 
-/** Open ??Investigating ??Review ??Completed ??Archived */
+/** Open → Investigating → Review → Completed → Archived */
 export const WORKFLOW_STATUSES: InvestigationStatus[] = [
   'Open',
   'Investigating',
@@ -14,21 +14,21 @@ export function workflowIndex(status: InvestigationStatus): number {
   return i >= 0 ? i : 0;
 }
 
-/** Completed / Archived ??콘텐�??�정 불�? */
+/** Completed / Archived 에서는 콘텐츠 수정 불가 */
 export function isInvestigationLocked(status: InvestigationStatus): boolean {
   return status === 'Completed' || status === 'Archived';
 }
 
-/** Archived ???�태 변경도 불�? */
+/** Archived 에서는 상태 변경도 불가 */
 export function isStatusChangeLocked(status: InvestigationStatus): boolean {
   return status === 'Archived';
 }
 
 /**
- * Dropdown???�출???�택지:
- * - ?�재 ?�태
- * - ?�음 ?�계(1?�계 ?�진)
- * - Completed ?�서??Archived�?추�? 가??
+ * Dropdown에 노출할 선택지:
+ * - 현재 상태
+ * - 다음 단계(1단계 전진)
+ * - Completed 에서는 Archived만 추가 가능
  */
 export function selectableWorkflowStatuses(
   current: InvestigationStatus,

@@ -26,6 +26,10 @@ export class CacheService implements OnModuleDestroy {
     return this.redis.get(`search:job:${searchId}`);
   }
 
+  async deleteSearchJob(searchId: string): Promise<void> {
+    await this.redis.del(`search:job:${searchId}`);
+  }
+
   async deleteByPattern(pattern: string): Promise<number> {
     let cursor = '0';
     let deleted = 0;
