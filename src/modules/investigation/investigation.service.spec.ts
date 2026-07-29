@@ -81,6 +81,11 @@ describe('InvestigationService autoCreateFromSearch', () => {
           autoCreated: entity.autoCreated ?? true,
           timeline: entity.timeline ?? [],
           aiAnalysis: entity.aiAnalysis ?? null,
+          notes: entity.notes ?? [],
+          finalDecision: entity.finalDecision ?? null,
+          finalDecisionNote: entity.finalDecisionNote ?? null,
+          decidedAt: entity.decidedAt ?? null,
+          dueDate: entity.dueDate ?? null,
           createdAt: entity.createdAt ?? new Date('2026-07-28T00:00:00.000Z'),
           updatedAt: new Date('2026-07-28T00:00:00.000Z'),
         } as InvestigationCaseEntity;
@@ -153,9 +158,10 @@ describe('InvestigationService autoCreateFromSearch', () => {
 
     const service = new InvestigationService(
       caseRepo as never,
-      { find: jest.fn() } as never,
+      { find: jest.fn(), findOne: jest.fn() } as never,
       historyRepo as never,
       jobRepo as never,
+      { findOne: jest.fn() } as never,
       config as never,
       aiService as never,
       ruleEngine as never,

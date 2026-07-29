@@ -1,20 +1,36 @@
-import { Injectable, Logger, Optional } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotFoundException,
+  Optional,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { randomUUID } from 'crypto';
+import { CrawlerResult } from '@/database/entities/crawler-result.entity';
 import { SearchHistory } from '@/database/entities/search-history.entity';
 import { SearchHistoryResult } from '@/database/entities/search-history-result.entity';
 import { SearchJob } from '@/database/entities/search-job.entity';
 import {
   InvestigationAiAnalysis,
   InvestigationCaseEntity,
+  InvestigationNote,
   InvestigationPriority,
+  InvestigationStatus,
   InvestigationTimelineEvent,
 } from '@/database/entities/investigation-case.entity';
 import { AiService } from '@/ai/ai.service';
 import { AiRuleEngineService } from '@/ai/rules/ai-rule-engine.service';
 import type { AiRuleMatch } from '@/ai/rules/ai-rule.types';
+import { canTransitionStatus } from './investigation.workflow';
+import type { CreateFinalDecisionDto } from './dto/create-final-decision.dto';
+import type { CreateInvestigationDto } from './dto/create-investigation.dto';
+import type { CreateInvestigationNoteDto } from './dto/create-investigation-note.dto';
+import type { UpdateInvestigationDto } from './dto/update-investigation.dto';
+import type { UpdateInvestigationNoteDto } from './dto/update-investigation-note.dto';
+import type { UpdateInvestigationStatusDto } from './dto/update-investigation-status.dto';
 
 export type AutoCreateResult = {
   created: InvestigationCaseEntity[];
@@ -38,6 +54,8 @@ export class InvestigationService {
     private readonly historyRepo: Repository<SearchHistory>,
     @InjectRepository(SearchJob)
     private readonly jobRepo: Repository<SearchJob>,
+    @InjectRepository(CrawlerResult)
+    private readonly resultRepo: Repository<CrawlerResult>,
     private readonly config: ConfigService,
     @Optional() private readonly aiService?: AiService,
     @Optional() private readonly ruleEngine?: AiRuleEngineService,
@@ -297,6 +315,320 @@ export class InvestigationService {
     return row ? this.toDto(row) : null;
   }
 
+  /**
+   * Overview용 집계.
+   * last24h: 최근 24시간 생성 케이스 수
+   * byStatus: 상태별 전체 건수
+   */
+  async getStats() {
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const last24h = await this.caseRepo
+      .createQueryBuilder('c')
+      .where('c.createdAt >= :since', { since })
+      .getCount();
+
+    const rows = await this.caseRepo
+      .createQueryBuilder('c')
+      .select('c.status', 'status')
+      .addSelect('COUNT(*)', 'cnt')
+      .groupBy('c.status')
+      .getRawMany<{ status: string; cnt: string }>();
+
+    const byStatus: Record<InvestigationStatus, number> = {
+      Open: 0,
+      Investigating: 0,
+      Review: 0,
+      Completed: 0,
+      Archived: 0,
+    };
+    for (const row of rows) {
+      if (row.status in byStatus) {
+        byStatus[row.status as InvestigationStatus] = Number(row.cnt) || 0;
+      }
+    }
+
+    return { last24h, byStatus };
+  }
+
+  async updateStatus(id: string, dto: UpdateInvestigationStatusDto) {
+    const row = await this.requireCase(id);
+    const next = dto.status;
+
+    if (!canTransitionStatus(row.status, next)) {
+      throw new BadRequestException(
+        `Illegal status transition: ${row.status} → ${next}`,
+      );
+    }
+
+    if (row.status === next) {
+      return this.toDto(row);
+    }
+
+    const now = new Date();
+    const timeline = [...(row.timeline ?? [])];
+    timeline.push(
+      this.tl(
+        'status_changed',
+        now.toISOString(),
+        '상태 변경',
+        `${row.status} → ${next}`,
+      ),
+    );
+
+    row.status = next;
+    row.timeline = timeline;
+    const saved = await this.caseRepo.save(row);
+    return this.toDto(saved);
+  }
+
+  async updateAssignment(id: string, dto: UpdateInvestigationDto) {
+    const row = await this.requireCase(id);
+    const now = new Date();
+    const timeline = [...(row.timeline ?? [])];
+    let changed = false;
+
+    if (dto.assignee !== undefined && dto.assignee !== row.assignee) {
+      const prev = row.assignee;
+      row.assignee = dto.assignee;
+      timeline.push(
+        this.tl(
+          'assignee_set',
+          now.toISOString(),
+          '담당자 변경',
+          dto.assignee
+            ? prev
+              ? `${prev} → ${dto.assignee}`
+              : dto.assignee
+            : prev
+              ? `${prev} → (해제)`
+              : '(해제)',
+        ),
+      );
+      changed = true;
+    }
+
+    if (dto.priority !== undefined && dto.priority !== row.priority) {
+      row.priority = dto.priority;
+      changed = true;
+    }
+
+    if (dto.dueDate !== undefined) {
+      const nextDue = dto.dueDate ? new Date(dto.dueDate) : null;
+      const prevMs = row.dueDate?.getTime() ?? null;
+      const nextMs = nextDue?.getTime() ?? null;
+      if (prevMs !== nextMs) {
+        row.dueDate = nextDue;
+        changed = true;
+      }
+    }
+
+    if (!changed) {
+      return this.toDto(row);
+    }
+
+    row.timeline = timeline;
+    const saved = await this.caseRepo.save(row);
+    return this.toDto(saved);
+  }
+
+  async addNote(id: string, dto: CreateInvestigationNoteDto) {
+    const row = await this.requireCase(id);
+    const now = new Date();
+    const note: InvestigationNote = {
+      id: randomUUID(),
+      body: dto.body.trim(),
+      author: (dto.author?.trim() || '담당자').slice(0, 100),
+      createdAt: now.toISOString(),
+      updatedAt: now.toISOString(),
+    };
+    const notes = [...(row.notes ?? []), note];
+    const timeline = [...(row.timeline ?? [])];
+    timeline.push(
+      this.tl(
+        'note_added',
+        now.toISOString(),
+        '메모 추가',
+        note.body.length > 120 ? `${note.body.slice(0, 117)}...` : note.body,
+      ),
+    );
+
+    row.notes = notes;
+    row.timeline = timeline;
+    const saved = await this.caseRepo.save(row);
+    return this.toDto(saved);
+  }
+
+  async updateNote(
+    id: string,
+    noteId: string,
+    dto: UpdateInvestigationNoteDto,
+  ) {
+    const row = await this.requireCase(id);
+    const notes = [...(row.notes ?? [])];
+    const idx = notes.findIndex((n) => n.id === noteId);
+    if (idx < 0) {
+      throw new NotFoundException(`Note not found: ${noteId}`);
+    }
+
+    const now = new Date();
+    notes[idx] = {
+      ...notes[idx],
+      body: dto.body.trim(),
+      updatedAt: now.toISOString(),
+    };
+    row.notes = notes;
+    const saved = await this.caseRepo.save(row);
+    return this.toDto(saved);
+  }
+
+  async deleteNote(id: string, noteId: string) {
+    const row = await this.requireCase(id);
+    const notes = row.notes ?? [];
+    if (!notes.some((n) => n.id === noteId)) {
+      throw new NotFoundException(`Note not found: ${noteId}`);
+    }
+    row.notes = notes.filter((n) => n.id !== noteId);
+    const saved = await this.caseRepo.save(row);
+    return this.toDto(saved);
+  }
+
+  async applyFinalDecision(id: string, dto: CreateFinalDecisionDto) {
+    const row = await this.requireCase(id);
+
+    if (row.status === 'Archived') {
+      throw new BadRequestException(
+        'Cannot apply final decision to an Archived case',
+      );
+    }
+
+    const now = new Date();
+    const alreadyCompleted = row.status === 'Completed';
+    const nextNote = dto.note?.trim() || null;
+    const sameDecision =
+      alreadyCompleted &&
+      row.finalDecision === dto.decision &&
+      (row.finalDecisionNote ?? null) === nextNote;
+
+    if (sameDecision) {
+      return this.toDto(row);
+    }
+
+    const timeline = [...(row.timeline ?? [])];
+    timeline.push(
+      this.tl(
+        'final_decision',
+        now.toISOString(),
+        '최종 판단',
+        nextNote ? `${dto.decision}: ${nextNote}` : dto.decision,
+      ),
+    );
+
+    if (!alreadyCompleted) {
+      timeline.push(
+        this.tl(
+          'status_changed',
+          now.toISOString(),
+          '상태 변경',
+          `${row.status} → Completed`,
+        ),
+      );
+      timeline.push(
+        this.tl('completed', now.toISOString(), '조사 완료', row.caseNo),
+      );
+      row.status = 'Completed';
+    }
+
+    row.finalDecision = dto.decision;
+    row.finalDecisionNote = nextNote;
+    row.decidedAt = now;
+    row.timeline = timeline;
+    const saved = await this.caseRepo.save(row);
+    return this.toDto(saved);
+  }
+
+  /**
+   * 수동 조사 시작.
+   * resultId 중복 시 새 row 없이 기존 케이스 반환 (HTTP 200).
+   */
+  async createManual(dto: CreateInvestigationDto) {
+    const existing = await this.caseRepo.findOne({
+      where: { resultId: dto.resultId },
+    });
+    if (existing) {
+      return this.toDto(existing);
+    }
+
+    const result = await this.resultRepo.findOne({
+      where: { id: dto.resultId },
+    });
+    if (!result) {
+      throw new NotFoundException(`Crawler result not found: ${dto.resultId}`);
+    }
+
+    let historyId = dto.searchHistoryId ?? result.searchHistoryId ?? null;
+    if (!historyId) {
+      const link = await this.historyResultRepo.findOne({
+        where: { resultId: dto.resultId },
+        order: { createdAt: 'DESC' },
+      });
+      historyId = link?.searchHistoryId ?? null;
+    }
+    if (!historyId) {
+      throw new BadRequestException(
+        'searchHistoryId is required when the listing has no search history link',
+      );
+    }
+
+    const history = await this.historyRepo.findOne({
+      where: { id: historyId },
+    });
+    if (!history) {
+      throw new NotFoundException(`Search history not found: ${historyId}`);
+    }
+
+    let job: SearchJob | null = null;
+    if (dto.searchJobId) {
+      job = await this.jobRepo.findOne({ where: { id: dto.searchJobId } });
+      if (!job) {
+        throw new NotFoundException(`Search job not found: ${dto.searchJobId}`);
+      }
+    } else {
+      job = await this.jobRepo.findOne({
+        where: { searchHistoryId: historyId },
+      });
+    }
+
+    const link = await this.historyResultRepo.findOne({
+      where: { resultId: dto.resultId, searchHistoryId: historyId },
+    });
+
+    const listing = {
+      id: result.id,
+      title: link?.title ?? result.title,
+      siteCode: result.siteCode,
+      url: result.url,
+      imageUrl: link?.imageUrl ?? result.imageUrl,
+      price: link?.price ?? result.price,
+      description: result.description,
+      titleSimilarity: link?.titleSimilarity ?? result.titleSimilarity,
+      imageSimilarity: link?.imageSimilarity ?? result.imageSimilarity,
+    };
+    const aiScore = this.computeAiScore(listing);
+    const threshold = await this.getAiScoreThreshold();
+
+    const caseEntity = await this.createCaseFromResult({
+      result: listing,
+      aiScore,
+      history,
+      job,
+      autoCreated: false,
+      threshold,
+      orderNoOverride: dto.orderNo?.trim() || null,
+    });
+
+    return this.toDto(caseEntity);
+  }
+
   async countBySearchJobId(searchJobId: string): Promise<number> {
     return this.caseRepo.count({ where: { searchJobId } });
   }
@@ -401,6 +733,8 @@ export class InvestigationService {
     autoCreated: boolean;
     threshold: number;
     ruleWarnings?: AiRuleMatch[];
+    /** 수동 생성 시 job.orderNo 가 없을 때 사용 */
+    orderNoOverride?: string | null;
   }): Promise<InvestigationCaseEntity> {
     const {
       result,
@@ -410,13 +744,15 @@ export class InvestigationService {
       autoCreated,
       threshold,
       ruleWarnings = [],
+      orderNoOverride = null,
     } = params;
     const now = new Date();
     const caseNo = await this.nextCaseNumber(now);
     const scorePct = Math.round(aiScore * 100);
 
     /** Investigation 은 listing + Job 링크만. 주문 마스터는 복제하지 않는다. */
-    const orderNo = job?.orderNo?.trim() || null;
+    const orderNo =
+      job?.orderNo?.trim() || orderNoOverride?.trim() || null;
     const listingTitle = result.title;
 
     const timeline: InvestigationTimelineEvent[] = [
@@ -619,6 +955,11 @@ export class InvestigationService {
       autoCreated,
       timeline,
       aiAnalysis: this.buildAiAnalysis(result, aiScore),
+      notes: [],
+      finalDecision: null,
+      finalDecisionNote: null,
+      decidedAt: null,
+      dueDate: null,
     });
 
     const saved = await this.caseRepo.save(entity);
@@ -889,6 +1230,14 @@ export class InvestigationService {
       if (Number.isFinite(n)) seq = n + 1;
     }
     return `${prefix}${String(seq).padStart(6, '0')}`;
+  }
+
+  private async requireCase(id: string): Promise<InvestigationCaseEntity> {
+    const row = await this.caseRepo.findOne({ where: { id } });
+    if (!row) {
+      throw new NotFoundException(`Investigation not found: ${id}`);
+    }
+    return row;
   }
 
   private tl(

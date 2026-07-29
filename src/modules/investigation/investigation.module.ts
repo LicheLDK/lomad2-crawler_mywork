@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { CrawlerResult } from '@/database/entities/crawler-result.entity';
 import { InvestigationCaseEntity } from '@/database/entities/investigation-case.entity';
 import { SearchHistory } from '@/database/entities/search-history.entity';
 import { SearchHistoryResult } from '@/database/entities/search-history-result.entity';
@@ -15,6 +16,7 @@ import { InvestigationController } from './investigation.controller';
       SearchHistoryResult,
       SearchHistory,
       SearchJob,
+      CrawlerResult,
     ]),
     AiModule,
   ],
