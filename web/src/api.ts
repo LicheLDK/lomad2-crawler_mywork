@@ -195,6 +195,15 @@ export const api = {
     }>(`/search-jobs/${encodeURIComponent(jobId)}/callback/resend`, {
       method: 'POST',
     }),
+  listFailedQueueJobs: (limit = 50) =>
+    request<import('./types').FailedQueueJobsResponse>(
+      `/queue/failed?limit=${limit}`,
+    ),
+  retryFailedQueueJob: (id: string) =>
+    request<import('./types').RetryFailedQueueJobResponse>(
+      `/queue/${encodeURIComponent(id)}/retry`,
+      { method: 'POST' },
+    ),
   results: (params: URLSearchParams) =>
     request<{
       page: number;

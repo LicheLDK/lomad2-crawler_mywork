@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import {
   Activity,
@@ -11,10 +11,16 @@ import {
   Radio,
   CalendarClock,
   Network,
+  RefreshCw,
+  RotateCcw,
 } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
-import { api } from '../api';
-import type { AiUsageSummary, HealthPayload } from '../types';
+import { api, formatApiError } from '../api';
+import type {
+  AiUsageSummary,
+  FailedQueueJobItem,
+  HealthPayload,
+} from '../types';
 
 type ServiceStatus = 'ONLINE' | 'OFFLINE' | 'WARNING' | 'READY';
 
@@ -65,6 +71,169 @@ function statusTone(status: ServiceStatus) {
 function fromUp(ok: boolean | undefined): ServiceStatus {
   if (ok === true) return 'ONLINE';
   return 'OFFLINE';
+}
+
+function formatWhen(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString('ko-KR', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function QueueFailedPanel({
+  highlight,
+  failedCount,
+  onCountsChange,
+}: {
+  highlight?: boolean;
+  failedCount: number;
+  onCountsChange?: () => void;
+}) {
+  const [items, setItems] = useState<FailedQueueJobItem[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loadState, setLoadState] = useState<'loading' | 'ok' | 'error'>(
+    'loading',
+  );
+  const [error, setError] = useState<string | null>(null);
+  const [retryingId, setRetryingId] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoadState('loading');
+    setError(null);
+    try {
+      const res = await api.listFailedQueueJobs(50);
+      setItems(res.items);
+      setTotal(res.total);
+      setLoadState('ok');
+    } catch (e) {
+      setItems([]);
+      setTotal(0);
+      setLoadState('error');
+      setError(formatApiError(e, 'DLQ 목록을 불러오지 못했습니다.'));
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load, failedCount]);
+
+  const handleRetry = async (id: string) => {
+    setRetryingId(id);
+    setError(null);
+    try {
+      await api.retryFailedQueueJob(id);
+      await load();
+      onCountsChange?.();
+    } catch (e) {
+      setError(formatApiError(e, '재시도에 실패했습니다.'));
+    } finally {
+      setRetryingId(null);
+    }
+  };
+
+  return (
+    <section
+      id="section-queue-failed"
+      className={`scroll-mt-4 rounded-2xl border bg-white/80 px-4 py-4 shadow-soft backdrop-blur ${
+        highlight ? 'border-amber-500/30 ring-2 ring-teal-600/40' : 'border-ink-100/80'
+      }`}
+    >
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-medium text-ink-900">Failed / DLQ</h3>
+          <p className="mt-0.5 text-[11px] text-ink-500">
+            재시도 소진된 crawl job · 총 {total.toLocaleString()}건
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => void load()}
+          disabled={loadState === 'loading'}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-ink-100 bg-white px-2.5 py-1.5 text-[11px] font-medium text-ink-700 hover:bg-ink-50 disabled:opacity-50"
+        >
+          <RefreshCw
+            className={`h-3.5 w-3.5 ${loadState === 'loading' ? 'animate-spin' : ''}`}
+          />
+          새로고침
+        </button>
+      </div>
+
+      {error ? (
+        <p className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-800">
+          {error}
+        </p>
+      ) : null}
+
+      {loadState === 'loading' && items.length === 0 ? (
+        <p className="mt-4 text-sm text-ink-500">목록 불러오는 중…</p>
+      ) : null}
+
+      {loadState === 'ok' && items.length === 0 ? (
+        <p className="mt-4 text-sm text-ink-500">
+          DLQ에 보관된 실패 job이 없습니다.
+        </p>
+      ) : null}
+
+      {items.length > 0 ? (
+        <div className="mt-4 overflow-x-auto">
+          <table className="min-w-full text-left text-xs">
+            <thead>
+              <tr className="border-b border-ink-100 text-[11px] uppercase tracking-wide text-ink-500">
+                <th className="px-2 py-2 font-medium">키워드</th>
+                <th className="px-2 py-2 font-medium">searchHistory</th>
+                <th className="px-2 py-2 font-medium">실패 시각</th>
+                <th className="px-2 py-2 font-medium">시도</th>
+                <th className="px-2 py-2 font-medium">사유</th>
+                <th className="px-2 py-2 font-medium" />
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((item) => (
+                <tr
+                  key={item.id}
+                  className="border-b border-ink-50 align-top last:border-0"
+                >
+                  <td className="px-2 py-2 font-medium text-ink-900">
+                    {item.keyword}
+                  </td>
+                  <td className="px-2 py-2 font-mono text-[11px] text-ink-600">
+                    {item.searchHistoryId.slice(0, 8)}…
+                  </td>
+                  <td className="px-2 py-2 text-ink-600">
+                    {formatWhen(item.failedAt)}
+                  </td>
+                  <td className="px-2 py-2 text-ink-600">
+                    {item.attemptsMade}
+                  </td>
+                  <td
+                    className="max-w-xs px-2 py-2 text-ink-600"
+                    title={item.failedReason}
+                  >
+                    <span className="line-clamp-2">{item.failedReason}</span>
+                  </td>
+                  <td className="px-2 py-2">
+                    <button
+                      type="button"
+                      onClick={() => void handleRetry(item.id)}
+                      disabled={retryingId === item.id}
+                      className="inline-flex items-center gap-1 rounded-md bg-teal-700 px-2 py-1 text-[11px] font-medium text-white hover:bg-teal-800 disabled:opacity-50"
+                    >
+                      <RotateCcw className="h-3 w-3" />
+                      {retryingId === item.id ? '재시도…' : '재시도'}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+    </section>
+  );
 }
 
 function formatUsd(value: number): string {
@@ -280,7 +449,9 @@ export function SystemPage({ health }: { health: HealthPayload | null }) {
   const section = searchParams.get('section') || 'worker';
   const [aiSummary, setAiSummary] = useState<AiUsageSummary | null>(null);
   const [aiLoad, setAiLoad] = useState<AiUsageLoadState>('loading');
+  const [queueRefreshKey, setQueueRefreshKey] = useState(0);
   const cards = buildCards(health, aiLoad, aiSummary);
+  const failedCount = health?.info?.queue?.failed ?? 0;
 
   useEffect(() => {
     let cancelled = false;
@@ -329,6 +500,12 @@ export function SystemPage({ health }: { health: HealthPayload | null }) {
           />
         ))}
       </div>
+
+      <QueueFailedPanel
+        highlight={section === 'queue'}
+        failedCount={failedCount + queueRefreshKey}
+        onCountsChange={() => setQueueRefreshKey((n) => n + 1)}
+      />
     </div>
   );
 }

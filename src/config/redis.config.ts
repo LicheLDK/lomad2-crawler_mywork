@@ -8,4 +8,9 @@ export default registerAs('redis', () => ({
   concurrency: parseInt(process.env.CRAWL_CONCURRENCY || '5', 10),
   attempts: parseInt(process.env.CRAWL_ATTEMPTS || '3', 10),
   backoffMs: parseInt(process.env.CRAWL_BACKOFF_MS || '5000', 10),
+  failedRetentionDays: parseInt(
+    process.env.QUEUE_FAILED_RETENTION_DAYS || '14',
+    10,
+  ),
+  failedMaxCount: parseInt(process.env.QUEUE_FAILED_MAX_COUNT || '500', 10),
 }));

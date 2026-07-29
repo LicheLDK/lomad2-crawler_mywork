@@ -5,6 +5,7 @@ import { QUEUE_NAMES } from '@/common/constants/queue';
 import { CrawlerModule } from '@/crawler/crawler.module';
 import { CrawlQueueService } from './crawl-queue.service';
 import { CrawlProcessor } from './crawl.processor';
+import { QueueController } from './queue.controller';
 
 const enableWorker = (process.env.ENABLE_WORKER || 'true') === 'true';
 
@@ -24,8 +25,12 @@ const enableWorker = (process.env.ENABLE_WORKER || 'true') === 'true';
     BullModule.registerQueue({
       name: QUEUE_NAMES.CRAWL,
     }),
+    BullModule.registerQueue({
+      name: QUEUE_NAMES.CRAWL_DLQ,
+    }),
     CrawlerModule,
   ],
+  controllers: [QueueController],
   providers: [
     CrawlQueueService,
     ...(enableWorker ? [CrawlProcessor] : []),

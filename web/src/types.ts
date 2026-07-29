@@ -129,3 +129,25 @@ export interface HealthPayload {
     queue?: Record<string, number>;
   };
 }
+
+/** GET /queue/failed */
+export interface FailedQueueJobItem {
+  id: string;
+  originalJobId: string;
+  jobName: string;
+  searchHistoryId: string;
+  keyword: string;
+  failedReason: string;
+  failedAt: string;
+  attemptsMade: number;
+}
+
+export interface FailedQueueJobsResponse {
+  total: number;
+  items: FailedQueueJobItem[];
+}
+
+/** POST /queue/:id/retry */
+export interface RetryFailedQueueJobResponse {
+  jobId: string;
+}

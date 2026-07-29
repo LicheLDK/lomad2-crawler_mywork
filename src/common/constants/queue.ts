@@ -5,5 +5,4 @@ export const QUEUE_NAMES = {
 
 export const JOB_NAMES = {
   SEARCH_CRAWL: 'search-crawl',
-  SITE_CRAWL: 'site-crawl',
 } as const;
