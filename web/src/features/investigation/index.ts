@@ -10,11 +10,11 @@ export {
   INVESTIGATION_ASSIGNEES,
 } from './types';
 
+export { InvestigationProvider } from './InvestigationProvider';
 export {
-  InvestigationProvider,
   useInvestigation,
   useInvestigationOptional,
-} from './InvestigationProvider';
+} from './useInvestigation';
 
 export { CaseListPage, InvestigationPage } from './components/CaseListPage';
 export { CaseDrawer, InvestigationDrawer } from './components/CaseDrawer';
@@ -28,6 +28,7 @@ export { useStartInvestigation } from './hooks/useStartInvestigation';
 
 export {
   INVESTIGATION_CHANGED,
+  LOCAL_WRITES_DISABLED,
   loadInvestigationCases,
   createInvestigationFromResult,
   changeInvestigationStatus,
@@ -38,6 +39,9 @@ export {
   deleteInvestigationNote,
   deleteInvestigationEvidence,
 } from './lib/store';
+
+export { WRITE_API_PENDING_HINT } from './types';
+export { mapServerCase } from './lib/mapServerCase';
 
 export {
   isInvestigationLocked,

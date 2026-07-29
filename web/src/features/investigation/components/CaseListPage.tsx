@@ -5,7 +5,7 @@ import type { InvestigationCase, InvestigationStatus } from '../types';
 import { INVESTIGATION_STATUSES } from '../types';
 import { formatDateShort, siteLabel, siteTone } from '../../../lib/format';
 import { StatusBadge } from './StatusBadge';
-import { useInvestigation } from '../InvestigationProvider';
+import { useInvestigation } from '../useInvestigation';
 import { Card } from '../../../components/ui/card';
 
 const SITE_OPTIONS = [
@@ -25,7 +25,8 @@ function isValidStatus(value: string | null): value is InvestigationStatus {
  * Case List — 목록만 담당. Detail은 전역 CaseDrawer.
  */
 export function CaseListPage() {
-  const { cases, selectedId, openCase } = useInvestigation();
+  const { cases, selectedId, openCase, loading, error, reload } =
+    useInvestigation();
   const [searchParams, setSearchParams] = useSearchParams();
   const statusFromUrl = searchParams.get('status');
   const initialStatus = isValidStatus(statusFromUrl) ? statusFromUrl : DEFAULT_STATUS;
@@ -135,10 +136,31 @@ export function CaseListPage() {
           <p className="text-sm text-ink-500">
             <span className="font-medium text-ink-800">{filtered.length}</span>
             건
+            {loading ? (
+              <span className="ml-2 text-ink-400">불러오는 중…</span>
+            ) : null}
           </p>
+          <button
+            type="button"
+            onClick={() => reload()}
+            className="rounded-lg px-2 py-1 text-xs font-medium text-teal-800 transition hover:bg-teal-50"
+          >
+            새로고침
+          </button>
         </div>
 
-        {filtered.length === 0 ? (
+        {error ? (
+          <div className="flex min-h-[200px] flex-col items-center justify-center gap-3 px-5 py-12 text-center">
+            <p className="text-sm text-rose-700">{error}</p>
+            <button
+              type="button"
+              onClick={() => reload()}
+              className="rounded-lg border border-ink-200 bg-white px-3 py-1.5 text-xs font-medium text-ink-700 transition hover:bg-sand-50"
+            >
+              다시 시도
+            </button>
+          </div>
+        ) : filtered.length === 0 && !loading ? (
           <div className="flex min-h-[260px] flex-col items-center justify-center px-5 py-16 text-center">
             <p className="text-xs uppercase tracking-[0.16em] text-ink-400">
               Cases
@@ -147,8 +169,13 @@ export function CaseListPage() {
               No matching cases
             </p>
             <p className="mt-2 max-w-sm text-sm text-ink-500">
-              검색어나 필터를 변경해 보세요.
+              검색어나 필터를 변경해 보세요. 서버에 자동 생성된 케이스가 없으면
+              검색 후 다시 확인하세요.
             </p>
+          </div>
+        ) : filtered.length === 0 && loading ? (
+          <div className="flex min-h-[200px] items-center justify-center px-5 py-12 text-sm text-ink-400">
+            불러오는 중…
           </div>
         ) : (
           <div className="overflow-x-auto">

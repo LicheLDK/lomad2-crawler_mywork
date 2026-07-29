@@ -11,7 +11,6 @@ import type {
   InvestigationCase,
   InvestigationPriority,
 } from '../types';
-import { isInvestigationLocked } from '../lib/workflow';
 import { StatusBadge } from './StatusBadge';
 import { InvestigationAiPanel } from './sections/AiAnalysisSection';
 import { InvestigationRecommendationPanel } from './sections/RecommendationSection';
@@ -99,7 +98,6 @@ export function CaseDrawer({
 
   const imageSrc = resolveAssetUrl(row.imageUrl) || row.imageUrl || null;
   const priority = row.priority ?? 'Medium';
-  const locked = isInvestigationLocked(row.status);
 
   function handleClose(e?: React.SyntheticEvent) {
     e?.preventDefault();
@@ -317,7 +315,7 @@ export function CaseDrawer({
             }}
             className="scroll-mt-2"
           >
-            <InvestigationEvidencePanel row={row} readOnly={locked} />
+            <InvestigationEvidencePanel row={row} readOnly />
           </section>
 
           <Separator />
@@ -328,7 +326,7 @@ export function CaseDrawer({
             }}
             className="scroll-mt-2 space-y-5"
           >
-            <InvestigationNotesPanel row={row} readOnly={locked} />
+            <InvestigationNotesPanel row={row} readOnly />
             <InvestigationFinalDecisionPanel row={row} />
           </section>
         </div>

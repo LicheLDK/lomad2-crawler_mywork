@@ -227,7 +227,7 @@ export function InvestigationNotesPanel({
 
       {readOnly ? (
         <p className="text-xs text-ink-400">
-          Completed 이후에는 메모를 수정할 수 없습니다.
+          쓰기 API 연결 전 — 메모는 읽기 전용입니다.
         </p>
       ) : null}
 

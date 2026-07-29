@@ -6,11 +6,9 @@ import type {
 import {
   INVESTIGATION_ASSIGNEES,
   INVESTIGATION_PRIORITIES,
+  WRITE_API_PENDING_HINT,
 } from '../../types';
-import { updateInvestigationAssignment } from '../../lib/store';
-import { isInvestigationLocked } from '../../lib/workflow';
 import { formatDateShort } from '../../../../lib/format';
-import { toast } from '../../../../components/Toast';
 import { Badge } from '../../../../components/ui/badge';
 import { cn } from '../../../../lib/utils';
 
@@ -39,7 +37,7 @@ export function InvestigationAssignmentPanel({
 }: {
   row: InvestigationCase;
 }) {
-  const locked = isInvestigationLocked(row.status);
+  const writesDisabled = true; // D-1: 쓰기 API 연결 전
   const priority = ((row.priority as string) === 'Critical'
     ? 'High'
     : (row.priority ?? 'Medium')) as InvestigationPriority;
@@ -50,26 +48,6 @@ export function InvestigationAssignmentPanel({
       ...(row.assignee ? [row.assignee] : []),
     ]),
   );
-
-  function apply(patch: {
-    assignee?: string | null;
-    priority?: InvestigationPriority;
-    dueDate?: string | null;
-  }) {
-    if (locked) return;
-    const updated = updateInvestigationAssignment(row.id, patch);
-    if (!updated) {
-      toast('담당을 변경할 수 없습니다.');
-      return;
-    }
-    if (patch.assignee !== undefined && patch.assignee !== row.assignee) {
-      toast(
-        patch.assignee
-          ? `담당자를 ${patch.assignee}(으)로 지정했습니다.`
-          : '담당자를 해제했습니다.',
-      );
-    }
-  }
 
   return (
     <section className="space-y-3">
@@ -93,10 +71,10 @@ export function InvestigationAssignmentPanel({
           <select
             id={`assignee-${row.id}`}
             value={row.assignee ?? ''}
-            disabled={locked}
-            onChange={(e) =>
-              apply({ assignee: e.target.value ? e.target.value : null })
-            }
+            disabled={writesDisabled}
+            onChange={() => {
+              /* D-1: no-op */
+            }}
             className="mt-1 w-full rounded-xl border border-ink-200 bg-white px-3 py-2.5 text-sm text-ink-800 outline-none transition focus:border-teal-600 focus:ring-2 focus:ring-teal-600/20 disabled:cursor-not-allowed disabled:bg-sand-50"
           >
             <option value="">미지정</option>
@@ -117,8 +95,10 @@ export function InvestigationAssignmentPanel({
                 <button
                   key={p}
                   type="button"
-                  disabled={locked}
-                  onClick={() => apply({ priority: p })}
+                  disabled={writesDisabled}
+                  onClick={() => {
+                    /* D-1: no-op */
+                  }}
                   className={cn(
                     'rounded-full transition disabled:cursor-not-allowed disabled:opacity-60',
                     active ? 'ring-2 ring-teal-600/40 ring-offset-1' : '',
@@ -147,10 +127,10 @@ export function InvestigationAssignmentPanel({
             id={`due-${row.id}`}
             type="date"
             value={toDateInputValue(row.dueDate)}
-            disabled={locked}
-            onChange={(e) =>
-              apply({ dueDate: e.target.value ? e.target.value : null })
-            }
+            disabled={writesDisabled}
+            onChange={() => {
+              /* D-1: no-op */
+            }}
             className="mt-1 w-full rounded-xl border border-ink-200 bg-white px-3 py-2.5 text-sm text-ink-800 outline-none transition focus:border-teal-600 focus:ring-2 focus:ring-teal-600/20 disabled:cursor-not-allowed disabled:bg-sand-50"
           />
           {row.dueDate ? (
@@ -160,12 +140,10 @@ export function InvestigationAssignmentPanel({
           ) : null}
         </div>
 
-        {locked ? (
-          <p className="inline-flex items-center gap-1.5 text-xs text-ink-500">
-            <Lock className="h-3.5 w-3.5" />
-            Completed 이후에는 담당을 수정할 수 없습니다
-          </p>
-        ) : null}
+        <p className="inline-flex items-center gap-1.5 text-xs text-ink-500">
+          <Lock className="h-3.5 w-3.5" />
+          {WRITE_API_PENDING_HINT} — 담당 지정은 저장되지 않습니다
+        </p>
       </div>
     </section>
   );

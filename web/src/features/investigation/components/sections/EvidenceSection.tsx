@@ -110,6 +110,12 @@ export function InvestigationEvidencePanel({
         Evidence
       </h3>
 
+      {readOnly ? (
+        <p className="text-xs text-ink-400">
+          쓰기 API 연결 전 — Evidence는 읽기 전용입니다.
+        </p>
+      ) : null}
+
       <ul className="space-y-2">
         {items.length === 0 ? (
           <li className="rounded-xl border border-dashed border-ink-200 bg-white px-4 py-6 text-center text-sm text-ink-400">

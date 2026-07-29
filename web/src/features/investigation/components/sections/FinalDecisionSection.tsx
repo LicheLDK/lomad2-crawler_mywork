@@ -1,10 +1,9 @@
 import { useState } from 'react';
-import { Ban, CheckCircle2, Search, ShieldAlert } from 'lucide-react';
+import { Ban, CheckCircle2, Lock, Search, ShieldAlert } from 'lucide-react';
 import type { FinalDecision, InvestigationCase } from '../../types';
-import { applyFinalDecision } from '../../lib/store';
+import { WRITE_API_PENDING_HINT } from '../../types';
 import { isInvestigationLocked } from '../../lib/workflow';
 import { formatTime } from '../../../../lib/format';
-import { toast } from '../../../../components/Toast';
 import { Badge } from '../../../../components/ui/badge';
 import { ConfirmDialog } from '../../../../components/ui/confirm-dialog';
 
@@ -64,21 +63,9 @@ export function InvestigationFinalDecisionPanel({
   row: InvestigationCase;
 }) {
   const locked = isInvestigationLocked(row.status);
+  const writesDisabled = true; // D-1: write API pending
   const [pending, setPending] = useState<FinalDecision | null>(null);
   const pendingOption = FINAL_DECISION_OPTIONS.find((o) => o.value === pending);
-
-  function confirm() {
-    if (!pending) return;
-    const updated = applyFinalDecision(row.id, pending);
-    setPending(null);
-    if (!updated) {
-      toast('최종 판정을 적용할 수 없습니다.');
-      return;
-    }
-    toast(
-      `최종 판정: ${finalDecisionLabel(pending)} · Completed로 변경했습니다.`,
-    );
-  }
 
   return (
     <section className="space-y-3">
@@ -100,14 +87,7 @@ export function InvestigationFinalDecisionPanel({
             <p className="text-xs text-ink-500">
               판정일 · {formatTime(row.decidedAt)}
             </p>
-            <p className="pt-1 text-xs text-ink-400">
-              최종 판정은 Completed 이후에는 변경할 수 없습니다.
-            </p>
           </div>
-        ) : locked ? (
-          <p className="text-sm text-ink-500">
-            Completed / Archived 상태에서는 최종 판정을 적용할 수 없습니다.
-          </p>
         ) : (
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {FINAL_DECISION_OPTIONS.map((opt) => {
@@ -116,8 +96,11 @@ export function InvestigationFinalDecisionPanel({
                 <button
                   key={opt.value}
                   type="button"
-                  onClick={() => setPending(opt.value)}
-                  className={`inline-flex items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-medium transition ${BTN[opt.tone]}`}
+                  disabled={writesDisabled || locked}
+                  onClick={() => {
+                    if (!writesDisabled && !locked) setPending(opt.value);
+                  }}
+                  className={`inline-flex items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50 ${BTN[opt.tone]}`}
                 >
                   <Icon className="h-4 w-4 shrink-0" />
                   {opt.label}
@@ -126,6 +109,11 @@ export function InvestigationFinalDecisionPanel({
             })}
           </div>
         )}
+
+        <p className="mt-3 inline-flex items-center gap-1.5 text-xs text-ink-500">
+          <Lock className="h-3.5 w-3.5" />
+          {WRITE_API_PENDING_HINT} — 최종 판정은 저장되지 않습니다
+        </p>
       </div>
 
       <ConfirmDialog
@@ -133,10 +121,10 @@ export function InvestigationFinalDecisionPanel({
         title="최종 판정 확인"
         description={
           pendingOption
-            ? `'${pendingOption.label}'(으)로 판정합니다. Case가 Completed로 변경되며 Timeline에 기록됩니다. ${pendingOption.description}`
+            ? `'${pendingOption.label}' — ${WRITE_API_PENDING_HINT}`
             : undefined
         }
-        confirmLabel="판정 확정"
+        confirmLabel="확인"
         cancelLabel="취소"
         tone={
           pending === 'resale_confirmed'
@@ -146,7 +134,7 @@ export function InvestigationFinalDecisionPanel({
               : 'default'
         }
         onCancel={() => setPending(null)}
-        onConfirm={confirm}
+        onConfirm={() => setPending(null)}
       />
     </section>
   );

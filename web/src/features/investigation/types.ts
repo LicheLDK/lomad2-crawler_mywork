@@ -139,3 +139,47 @@ export const INVESTIGATION_ASSIGNEES = [
   '박조사',
   '최분석',
 ] as const;
+
+/** GET /api/investigations · /:id 서버 응답 (쓰기 필드 없음) */
+export type ServerInvestigationDto = {
+  id: string;
+  caseNo: string;
+  productName: string;
+  order?: { orderNo?: string | null } | null;
+  orderNo?: string | null;
+  orderUrl?: string | null;
+  listingTitle?: string | null;
+  aiScore: number;
+  aiScorePercent?: number;
+  status: InvestigationStatus | string;
+  priority: InvestigationPriority | string;
+  assignee?: string | null;
+  siteCode: string;
+  url?: string | null;
+  imageUrl?: string | null;
+  price?: string | null;
+  resultId?: string | null;
+  searchHistoryId?: string | null;
+  searchJobId?: string | null;
+  autoCreated?: boolean;
+  timeline?: InvestigationTimelineEvent[];
+  aiAnalysis?: InvestigationAiAnalysis | null;
+  investigationSummary?: string | null;
+  judgmentReasons?: string[] | null;
+  aiRecommendation?: InvestigationAiRecommendation | null;
+  createdAt: string;
+};
+
+export type InvestigationListResponse = {
+  total: number;
+  threshold: number;
+  items: ServerInvestigationDto[];
+};
+
+export type InvestigationConfigResponse = {
+  aiScoreThreshold: number;
+  autoCreateEnabled: boolean;
+};
+
+/** D-1~D-4: 쓰기 API 연결 전 UI 안내 */
+export const WRITE_API_PENDING_HINT = '쓰기 API 연결 전';

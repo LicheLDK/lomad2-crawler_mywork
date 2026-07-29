@@ -179,4 +179,16 @@ export const api = {
       total: number;
       items: import('./types').SearchResult[];
     }>(`/result?${params.toString()}`),
+  listInvestigations: (limit = 100) =>
+    request<import('./features/investigation/types').InvestigationListResponse>(
+      `/investigations?limit=${limit}`,
+    ),
+  getInvestigation: (id: string) =>
+    request<import('./features/investigation/types').ServerInvestigationDto>(
+      `/investigations/${encodeURIComponent(id)}`,
+    ),
+  getInvestigationConfig: () =>
+    request<import('./features/investigation/types').InvestigationConfigResponse>(
+      '/investigations/config',
+    ),
 };

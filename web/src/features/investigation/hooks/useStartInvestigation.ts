@@ -1,24 +1,17 @@
 import type { SearchResult } from '../../../types';
-import { createInvestigationFromResult } from '../lib/store';
-import { useInvestigationOptional } from '../InvestigationProvider';
+import { WRITE_API_PENDING_HINT } from '../types';
 import { toast } from '../../../components/Toast';
 
 /**
  * 검색 결과에서 Investigation Case 생성
- * — 페이지 이동 없음. 선택 시 Drawer로 즉시 열기 가능.
+ * — D-1: 쓰기 API 연결 전. localStorage에 쓰지 않음. D-6에서 POST 연결.
  */
 export function useStartInvestigation() {
-  const inv = useInvestigationOptional();
-
   return function startInvestigation(
-    row: SearchResult,
-    options?: { openDrawer?: boolean },
-  ) {
-    const created = createInvestigationFromResult(row);
-    toast('Investigation이 생성되었습니다.');
-    if (options?.openDrawer !== false && inv) {
-      inv.openCase(created);
-    }
-    return created;
+    _row: SearchResult,
+    _options?: { openDrawer?: boolean },
+  ): null {
+    toast(`${WRITE_API_PENDING_HINT} — 수동 조사 시작은 곧 연결됩니다.`);
+    return null;
   };
 }

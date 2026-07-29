@@ -1,10 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowUpRight } from 'lucide-react';
-import {
-  INVESTIGATION_CHANGED,
-  loadInvestigationCases,
-} from '../lib/store';
+import { useInvestigation } from '../useInvestigation';
 import type { InvestigationStatus } from '../types';
 
 const SUMMARY_STATUSES: InvestigationStatus[] = [
@@ -16,20 +13,10 @@ const SUMMARY_STATUSES: InvestigationStatus[] = [
 
 /**
  * Dashboard Investigation Summary Card
- * — 기존 검색 Dashboard Summary와 분리된 카드
+ * — 서버 케이스 건수/상태를 Provider에서 반영
  */
 export function InvestigationSummaryCard() {
-  const [cases, setCases] = useState(() => loadInvestigationCases());
-
-  useEffect(() => {
-    const reload = () => setCases(loadInvestigationCases());
-    window.addEventListener(INVESTIGATION_CHANGED, reload);
-    window.addEventListener('storage', reload);
-    return () => {
-      window.removeEventListener(INVESTIGATION_CHANGED, reload);
-      window.removeEventListener('storage', reload);
-    };
-  }, []);
+  const { cases, loading, error } = useInvestigation();
 
   const counts = useMemo(() => {
     const map: Record<string, number> = {
@@ -63,19 +50,26 @@ export function InvestigationSummaryCard() {
       </div>
 
       <div className="border-t border-ink-100/80 px-5 pb-5 pt-4">
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {SUMMARY_STATUSES.map((status) => (
-            <div
-              key={status}
-              className="rounded-xl border border-ink-100/70 bg-sand-50/80 px-3 py-3"
-            >
-              <div className="text-xs text-ink-500">{status}</div>
-              <div className="mt-1 font-display text-2xl tabular-nums text-ink-900">
-                {counts[status] ?? 0}
+        {error ? (
+          <p className="mb-3 text-xs text-rose-700">{error}</p>
+        ) : null}
+        {loading && cases.length === 0 ? (
+          <p className="text-sm text-ink-400">불러오는 중…</p>
+        ) : (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {SUMMARY_STATUSES.map((status) => (
+              <div
+                key={status}
+                className="rounded-xl border border-ink-100/70 bg-sand-50/80 px-3 py-3"
+              >
+                <div className="text-xs text-ink-500">{status}</div>
+                <div className="mt-1 font-display text-2xl tabular-nums text-ink-900">
+                  {counts[status] ?? 0}
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
     </section>
   );
