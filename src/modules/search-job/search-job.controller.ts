@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
   Param,
   ParseUUIDPipe,
   Post,
@@ -21,6 +22,7 @@ import {
   SearchJobDetailResponseDto,
   SearchJobProgressResponseDto,
 } from './dto/search-job-response.dto';
+import { ResendCallbackResponseDto } from './dto/resend-callback-response.dto';
 
 @ApiTags('search-job')
 @ApiHeader({ name: 'x-api-key', required: true })
@@ -55,6 +57,34 @@ export class SearchJobController {
   })
   getRentalJobDetail(@Param('jobId', ParseUUIDPipe) jobId: string) {
     return this.searchJobService.getRentalJobDetail(jobId);
+  }
+
+  @Post(':id/callback/resend')
+  @HttpCode(200)
+  @ApiOperation({
+    summary:
+      'BackOffice callback 수동 재전송 (자동 재시도 없음). 이미 성공한 callback 은 409',
+  })
+  @ApiResponse({
+    status: 200,
+    description: '재전송 성공. callbackSentAt 갱신, callbackError null',
+    type: ResendCallbackResponseDto,
+  })
+  @ApiResponse({
+    status: 409,
+    description:
+      '이미 성공 전송됨 (callbackSentAt 존재 & callbackError null). 중복 전송하지 않음',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Job 상태가 completed/partial 아님, 또는 callback 비활성',
+  })
+  @ApiResponse({
+    status: 502,
+    description: '재전송 실패 — callbackError 에 원인 재기록',
+  })
+  resendCallback(@Param('id', ParseUUIDPipe) id: string) {
+    return this.searchJobService.resendCallback(id);
   }
 
   @Get(':id/progress')

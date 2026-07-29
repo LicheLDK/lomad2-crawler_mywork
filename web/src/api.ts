@@ -126,6 +126,8 @@ export const api = {
         requestedAt: string;
         finishedAt: string | null;
         investigationCount: number;
+        callbackSentAt: string | null;
+        callbackError: string | null;
       }>;
     }>(`/search-jobs/rental/recent?limit=${limit}`),
   getRentalJob: (jobId: string) =>
@@ -143,6 +145,8 @@ export const api = {
         requestedAt: string;
         finishedAt: string | null;
         errorMessage: string | null;
+        callbackSentAt: string | null;
+        callbackError: string | null;
         keywordHistories: import('./types').KeywordHistoryItem[];
       };
       order: {
@@ -182,6 +186,15 @@ export const api = {
       }>;
       investigationCount: number;
     }>(`/search-jobs/rental/jobs/${encodeURIComponent(jobId)}`),
+  resendSearchJobCallback: (jobId: string) =>
+    request<{
+      jobId: string;
+      resent: boolean;
+      callbackSentAt: string;
+      callbackError: null;
+    }>(`/search-jobs/${encodeURIComponent(jobId)}/callback/resend`, {
+      method: 'POST',
+    }),
   results: (params: URLSearchParams) =>
     request<{
       page: number;

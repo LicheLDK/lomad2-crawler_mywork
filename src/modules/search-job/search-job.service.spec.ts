@@ -987,6 +987,114 @@ describe('SearchJobService', () => {
       });
     });
   });
+
+  describe('TASK B-6 callback resend', () => {
+    it('resends callback and clears callbackError on success', async () => {
+      const {
+        service,
+        jobRepo,
+        jobHistoryRepo,
+        rentalService,
+        investigationService,
+      } = createService({ mockRunSearch: false });
+
+      const finishedAt = new Date('2026-07-29T02:00:00.000Z');
+      jobRepo.findOne.mockResolvedValue({
+        id: 'job-1',
+        orderNo: 'ORDER-1',
+        status: SearchJobStatus.COMPLETED,
+        finishedAt,
+        resultCount: 2,
+        callbackSentAt: null,
+        callbackError: 'previous failure',
+      });
+      investigationService.countBySearchJobId.mockResolvedValue(1);
+      jobHistoryRepo.find.mockResolvedValue([]);
+      rentalService.notifySearchCompleted.mockResolvedValue(true);
+
+      const result = await service.resendCallback('job-1');
+
+      expect(result.resent).toBe(true);
+      expect(result.callbackError).toBeNull();
+      expect(result.callbackSentAt).toBeInstanceOf(Date);
+      expect(jobRepo.update).toHaveBeenCalledWith(
+        'job-1',
+        expect.objectContaining({
+          callbackSentAt: expect.any(Date),
+          callbackError: null,
+        }),
+      );
+      expect(rentalService.notifySearchCompleted).toHaveBeenCalledTimes(1);
+    });
+
+    it('returns 409 when callback already sent successfully', async () => {
+      const { service, jobRepo, rentalService } = createService({
+        mockRunSearch: false,
+      });
+      const sentAt = new Date('2026-07-29T01:00:00.000Z');
+      jobRepo.findOne.mockResolvedValue({
+        id: 'job-1',
+        status: SearchJobStatus.COMPLETED,
+        callbackSentAt: sentAt,
+        callbackError: null,
+      });
+
+      await expect(service.resendCallback('job-1')).rejects.toMatchObject({
+        status: 409,
+        message: expect.stringContaining('already sent successfully'),
+      });
+      expect(rentalService.notifySearchCompleted).not.toHaveBeenCalled();
+    });
+
+    it('rewrites callbackError when resend fails', async () => {
+      const {
+        service,
+        jobRepo,
+        jobHistoryRepo,
+        rentalService,
+        investigationService,
+      } = createService({ mockRunSearch: false });
+
+      jobRepo.findOne.mockResolvedValue({
+        id: 'job-1',
+        orderNo: 'ORDER-1',
+        status: SearchJobStatus.PARTIAL,
+        finishedAt: new Date('2026-07-29T02:00:00.000Z'),
+        resultCount: 1,
+        callbackSentAt: null,
+        callbackError: 'old error',
+      });
+      investigationService.countBySearchJobId.mockResolvedValue(0);
+      jobHistoryRepo.find.mockResolvedValue([]);
+      rentalService.notifySearchCompleted.mockRejectedValue(
+        new Error('BackOffice 503'),
+      );
+
+      await expect(service.resendCallback('job-1')).rejects.toMatchObject({
+        status: 502,
+      });
+      expect(jobRepo.update).toHaveBeenCalledWith('job-1', {
+        callbackError: 'BackOffice 503',
+      });
+    });
+
+    it('completion path still skips when callbackSentAt is set (idempotent)', async () => {
+      const { service, jobRepo, rentalService } = createService({
+        mockRunSearch: false,
+      });
+      jobRepo.findOne.mockResolvedValue({
+        id: 'job-1',
+        status: SearchJobStatus.COMPLETED,
+        callbackSentAt: new Date('2026-07-29T01:00:00.000Z'),
+        callbackError: null,
+      });
+
+      await (service as any).sendBackOfficeCallback('job-1');
+
+      expect(rentalService.notifySearchCompleted).not.toHaveBeenCalled();
+      expect(jobRepo.update).not.toHaveBeenCalled();
+    });
+  });
 });
 
 describe('SearchJobProgressSync TASK A-4 progress aggregation', () => {

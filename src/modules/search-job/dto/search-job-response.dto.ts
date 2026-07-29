@@ -72,6 +72,18 @@ export class SearchJobDetailResponseDto {
   @ApiPropertyOptional({ nullable: true })
   finishedAt!: Date | null;
 
+  @ApiPropertyOptional({
+    nullable: true,
+    description: 'BackOffice callback 성공 전송 시각',
+  })
+  callbackSentAt!: Date | null;
+
+  @ApiPropertyOptional({
+    nullable: true,
+    description: 'BackOffice callback 실패 메시지 (성공 시 null)',
+  })
+  callbackError!: string | null;
+
   @ApiPropertyOptional({ nullable: true })
   productNameSnapshot!: string | null;
 

@@ -3,6 +3,8 @@ import {
   Logger,
   NotFoundException,
   BadRequestException,
+  ConflictException,
+  BadGatewayException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -170,9 +172,52 @@ export class SearchJobService {
       requestedAt: job.requestedAt,
       finishedAt: job.finishedAt,
       investigationCount: counts.get(job.id) ?? 0,
+      callbackSentAt: job.callbackSentAt,
+      callbackError: job.callbackError,
     }));
 
     return { total: items.length, items };
+  }
+
+  /**
+   * BackOffice callback 수동 재전송.
+   * - 자동 재시도 없음 (B6). 이 엔드포인트만 재전송한다.
+   * - 이미 성공(`callbackSentAt` 있고 `callbackError` null)이면 409.
+   * - 실패·미전송만 허용. 성공 시 sentAt 갱신·error null.
+   */
+  async resendCallback(jobId: string) {
+    const job = await this.jobRepo.findOne({ where: { id: jobId } });
+    if (!job) {
+      throw new NotFoundException(`Search job not found: ${jobId}`);
+    }
+
+    if (job.callbackSentAt && !job.callbackError) {
+      throw new ConflictException(
+        `Callback already sent successfully at ${job.callbackSentAt.toISOString()}`,
+      );
+    }
+
+    if (
+      job.status !== SearchJobStatus.COMPLETED &&
+      job.status !== SearchJobStatus.PARTIAL
+    ) {
+      throw new BadRequestException(
+        `Callback resend requires completed or partial status (status=${job.status})`,
+      );
+    }
+
+    const result = await this.deliverBackOfficeCallback(job, {
+      throwOnFailure: true,
+    });
+    if (!result.resent || !result.callbackSentAt) {
+      throw new BadGatewayException('Callback resend did not complete');
+    }
+    return {
+      jobId: result.jobId,
+      resent: true as const,
+      callbackSentAt: result.callbackSentAt,
+      callbackError: null,
+    };
   }
 
   /**
@@ -746,7 +791,7 @@ export class SearchJobService {
     }
   }
 
-  /** 검색 완료 → BackOffice Callback (COMPLETED / PARTIAL) */
+  /** 검색 완료 → BackOffice Callback (COMPLETED / PARTIAL). 자동 재시도 없음. */
   private async sendBackOfficeCallback(searchJobId: string): Promise<void> {
     const job = await this.jobRepo.findOne({ where: { id: searchJobId } });
     if (!job) return;
@@ -761,6 +806,24 @@ export class SearchJobService {
       return;
     }
 
+    await this.deliverBackOfficeCallback(job, { throwOnFailure: false });
+  }
+
+  /**
+   * BackOffice callback 실제 전송.
+   * 성공 시 callbackSentAt 갱신·callbackError null.
+   * 실패 시 callbackError 기록 (자동 재시도 없음).
+   */
+  private async deliverBackOfficeCallback(
+    job: SearchJob,
+    options: { throwOnFailure: boolean },
+  ): Promise<{
+    jobId: string;
+    resent: boolean;
+    callbackSentAt: Date | null;
+    callbackError: string | null;
+  }> {
+    const searchJobId = job.id;
     const investigationCount =
       await this.investigationService.countBySearchJobId(searchJobId);
     const completedAt = (job.finishedAt ?? new Date()).toISOString();
@@ -778,13 +841,41 @@ export class SearchJobService {
         resultCount: job.resultCount,
         keywordSummaries,
       });
-      if (sent) {
-        await this.jobRepo.update(searchJobId, {
-          callbackSentAt: new Date(),
+      if (!sent) {
+        const disabledMsg =
+          'Callback is disabled or RENTAL_API_BASE_URL is not configured';
+        if (options.throwOnFailure) {
+          throw new BadRequestException(disabledMsg);
+        }
+        this.logger.debug(
+          `BackOffice callback skipped jobId=${searchJobId}: ${disabledMsg}`,
+        );
+        return {
+          jobId: searchJobId,
+          resent: false,
+          callbackSentAt: null,
           callbackError: null,
-        });
+        };
       }
+
+      const callbackSentAt = new Date();
+      await this.jobRepo.update(searchJobId, {
+        callbackSentAt,
+        callbackError: null,
+      });
+      return {
+        jobId: searchJobId,
+        resent: true,
+        callbackSentAt,
+        callbackError: null,
+      };
     } catch (error) {
+      if (
+        error instanceof BadRequestException ||
+        error instanceof ConflictException
+      ) {
+        throw error;
+      }
       const message =
         error instanceof Error ? error.message : String(error);
       this.logger.warn(
@@ -793,6 +884,17 @@ export class SearchJobService {
       await this.jobRepo.update(searchJobId, {
         callbackError: message.slice(0, 1000),
       });
+      if (options.throwOnFailure) {
+        throw new BadGatewayException(
+          `Callback resend failed: ${message.slice(0, 500)}`,
+        );
+      }
+      return {
+        jobId: searchJobId,
+        resent: false,
+        callbackSentAt: null,
+        callbackError: message.slice(0, 1000),
+      };
     }
   }
 
@@ -862,6 +964,8 @@ export class SearchJobService {
       /** 실행 스냅샷 (마스터 아님) */
       productNameSnapshot: job.productName,
       productNoSnapshot: job.productNo,
+      callbackSentAt: job.callbackSentAt,
+      callbackError: job.callbackError,
       keywordHistories,
     };
   }

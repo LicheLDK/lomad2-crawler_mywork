@@ -21,6 +21,8 @@ type RentalJobSummary = {
   requestedAt: string;
   finishedAt: string | null;
   investigationCount: number;
+  callbackSentAt: string | null;
+  callbackError: string | null;
 };
 
 type RentalOrderContext = {
@@ -120,6 +122,10 @@ export function RentalPage({
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [live, setLive] = useState<JobLive | null>(null);
+  const [callbackError, setCallbackError] = useState<string | null>(null);
+  const [callbackSentAt, setCallbackSentAt] = useState<string | null>(null);
+  const [resendingCallback, setResendingCallback] = useState(false);
+  const [resendMessage, setResendMessage] = useState<string | null>(null);
   const { openCase } = useInvestigation();
 
   function setTab(next: 'contracts' | 'auto' | 'investigations') {
@@ -155,11 +161,15 @@ export function RentalPage({
       setKeywordHistories([]);
       setInvestigations([]);
       setLive(null);
+      setCallbackError(null);
+      setCallbackSentAt(null);
+      setResendMessage(null);
       return;
     }
     let cancelled = false;
     setLoadingDetail(true);
     setDetailError(null);
+    setResendMessage(null);
     void api
       .getRentalJob(selectedJobId)
       .then((res) => {
@@ -169,6 +179,8 @@ export function RentalPage({
         setHistories(res.searchHistories);
         setKeywordHistories(res.job.keywordHistories ?? []);
         setInvestigations(res.investigations);
+        setCallbackError(res.job.callbackError ?? null);
+        setCallbackSentAt(res.job.callbackSentAt ?? null);
         setLive({
           status: res.job.status,
           progress: res.job.progress,
@@ -185,6 +197,8 @@ export function RentalPage({
                   currentSite: res.job.currentSite,
                   resultCount: res.job.resultCount,
                   investigationCount: res.investigationCount,
+                  callbackSentAt: res.job.callbackSentAt ?? null,
+                  callbackError: res.job.callbackError ?? null,
                 }
               : j,
           ),
@@ -262,6 +276,62 @@ export function RentalPage({
   );
   const countsDiffer =
     keywordHistories.length > 0 && keywordSum !== jobResultCount;
+
+  const jobStatus = live?.status || selected?.status || '';
+  const canResendCallback =
+    !!selectedJobId &&
+    (jobStatus === 'completed' || jobStatus === 'partial') &&
+    !(callbackSentAt && !callbackError);
+
+  async function handleResendCallback() {
+    if (!selectedJobId || resendingCallback) return;
+    setResendingCallback(true);
+    setResendMessage(null);
+    try {
+      const res = await api.resendSearchJobCallback(selectedJobId);
+      setCallbackSentAt(res.callbackSentAt);
+      setCallbackError(null);
+      setResendMessage('BackOffice callback을 재전송했습니다.');
+      setJobs((prev) =>
+        prev.map((j) =>
+          j.jobId === selectedJobId
+            ? {
+                ...j,
+                callbackSentAt: res.callbackSentAt,
+                callbackError: null,
+              }
+            : j,
+        ),
+      );
+    } catch (error) {
+      const msg =
+        error instanceof Error
+          ? error.message
+          : 'Callback 재전송에 실패했습니다.';
+      setResendMessage(msg);
+      // 실패 시 서버가 callbackError를 재기록했을 수 있으므로 상세 재조회
+      try {
+        const detail = await api.getRentalJob(selectedJobId);
+        setCallbackError(detail.job.callbackError ?? null);
+        setCallbackSentAt(detail.job.callbackSentAt ?? null);
+        setJobs((prev) =>
+          prev.map((j) =>
+            j.jobId === selectedJobId
+              ? {
+                  ...j,
+                  callbackSentAt: detail.job.callbackSentAt ?? null,
+                  callbackError: detail.job.callbackError ?? null,
+                }
+              : j,
+          ),
+        );
+      } catch {
+        /* ignore refresh failure */
+      }
+    } finally {
+      setResendingCallback(false);
+    }
+  }
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-4 animate-fadeUp">
@@ -375,6 +445,17 @@ export function RentalPage({
                         >
                           Inv {job.investigationCount} ·{' '}
                           {formatWhen(job.requestedAt)}
+                          {job.callbackError ? (
+                            <span
+                              className={
+                                on
+                                  ? ' ml-1 text-rose-200'
+                                  : ' ml-1 text-rose-700'
+                              }
+                            >
+                              · callback 실패
+                            </span>
+                          ) : null}
                         </p>
                       </button>
                     </li>
@@ -469,6 +550,45 @@ export function RentalPage({
                         아닙니다.
                       </p>
                     ) : null}
+                    {(callbackError ||
+                      callbackSentAt ||
+                      canResendCallback) && (
+                      <div className="mt-3 rounded-xl border border-ink-100 bg-sand-50/60 px-3 py-2.5">
+                        <p className="text-xs font-medium text-ink-800">
+                          BackOffice Callback
+                        </p>
+                        {callbackError ? (
+                          <p className="mt-1 text-sm leading-relaxed text-rose-800">
+                            {callbackError}
+                          </p>
+                        ) : callbackSentAt ? (
+                          <p className="mt-1 text-sm text-teal-800">
+                            전송 완료 · {formatWhen(callbackSentAt)}
+                          </p>
+                        ) : (
+                          <p className="mt-1 text-sm text-ink-500">
+                            아직 전송되지 않았습니다.
+                          </p>
+                        )}
+                        {canResendCallback ? (
+                          <button
+                            type="button"
+                            onClick={() => void handleResendCallback()}
+                            disabled={resendingCallback}
+                            className="mt-2 rounded-lg bg-ink-900 px-3 py-1.5 text-xs text-sand-50 transition hover:bg-ink-800 disabled:opacity-50"
+                          >
+                            {resendingCallback
+                              ? '재전송 중…'
+                              : 'Callback 재전송'}
+                          </button>
+                        ) : null}
+                        {resendMessage ? (
+                          <p className="mt-1.5 text-[11px] leading-relaxed text-ink-600">
+                            {resendMessage}
+                          </p>
+                        ) : null}
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
