@@ -48,6 +48,19 @@ export interface StatsOverview {
   totals: { results: number; searches: number; keywords: number };
   last24h: { results: number; searches: number };
   bySite: { siteCode: string; count: number }[];
+  /** crawl_site_attempts 집계 — GET /stats → siteMetrics */
+  siteMetrics?: {
+    hours: number;
+    sites: {
+      siteCode: string;
+      totalAttempts: number;
+      successCount: number;
+      failCount: number;
+      successRate: number | null;
+      avgLatencyMs: number | null;
+      p95LatencyMs: number | null;
+    }[];
+  };
   byStatus: { status: string; count: number }[];
   topKeywords: {
     keyword: string;

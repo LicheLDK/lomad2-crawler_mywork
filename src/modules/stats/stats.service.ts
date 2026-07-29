@@ -2,11 +2,22 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, MoreThanOrEqual } from 'typeorm';
 import {
+  CrawlSiteAttempt,
   CrawlerResult,
   SearchHistory,
   SearchKeyword,
 } from '@/database/entities';
 import { CrawlQueueService } from '@/queue/crawl-queue.service';
+
+export interface SiteMetricsRow {
+  siteCode: string;
+  totalAttempts: number;
+  successCount: number;
+  failCount: number;
+  successRate: number | null;
+  avgLatencyMs: number | null;
+  p95LatencyMs: number | null;
+}
 
 @Injectable()
 export class StatsService {
@@ -17,11 +28,16 @@ export class StatsService {
     private readonly historyRepo: Repository<SearchHistory>,
     @InjectRepository(SearchKeyword)
     private readonly keywordRepo: Repository<SearchKeyword>,
+    @InjectRepository(CrawlSiteAttempt)
+    private readonly attemptRepo: Repository<CrawlSiteAttempt>,
     private readonly crawlQueue: CrawlQueueService,
   ) {}
 
-  async getOverview() {
+  async getOverview(metricsHours = 24) {
     const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const sinceMetrics = new Date(
+      Date.now() - metricsHours * 60 * 60 * 1000,
+    );
     const since14d = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
 
     const [
@@ -37,6 +53,7 @@ export class StatsService {
       searchTrendRaw,
       resultTrendRaw,
       queue,
+      siteMetricsRaw,
     ] = await Promise.all([
       this.resultRepo.count(),
       this.historyRepo.count(),
@@ -86,6 +103,7 @@ export class StatsService {
         .orderBy('day', 'ASC')
         .getRawMany<{ day: string; count: string }>(),
       this.crawlQueue.getJobCounts().catch(() => null),
+      this.querySiteMetricsSince(sinceMetrics),
     ]);
 
     const searchByDay = new Map(
@@ -130,9 +148,64 @@ export class StatsService {
         errorMessage: h.errorMessage,
       })),
       searchTrend,
+      siteMetrics: {
+        hours: metricsHours,
+        sites: siteMetricsRaw,
+      },
       queue,
       generatedAt: new Date().toISOString(),
     };
+  }
+
+  private async querySiteMetricsSince(since: Date): Promise<SiteMetricsRow[]> {
+    const rows = await this.attemptRepo
+      .createQueryBuilder('a')
+      .select('a.siteCode', 'siteCode')
+      .addSelect('COUNT(*)', 'totalAttempts')
+      .addSelect(
+        'SUM(CASE WHEN a.success = true THEN 1 ELSE 0 END)',
+        'successCount',
+      )
+      .addSelect(
+        'SUM(CASE WHEN a.success = false THEN 1 ELSE 0 END)',
+        'failCount',
+      )
+      .addSelect('AVG(a.durationMs)', 'avgLatencyMs')
+      .addSelect(
+        'PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY a.durationMs)',
+        'p95LatencyMs',
+      )
+      .where('a.createdAt >= :since', { since })
+      .groupBy('a.siteCode')
+      .orderBy('"totalAttempts"', 'DESC')
+      .getRawMany<{
+        siteCode: string;
+        totalAttempts: string;
+        successCount: string;
+        failCount: string;
+        avgLatencyMs: string | null;
+        p95LatencyMs: string | null;
+      }>();
+
+    return rows.map((row) => {
+      const totalAttempts = Number(row.totalAttempts);
+      const successCount = Number(row.successCount);
+      const failCount = Number(row.failCount);
+      return {
+        siteCode: row.siteCode,
+        totalAttempts,
+        successCount,
+        failCount,
+        successRate:
+          totalAttempts > 0 ? successCount / totalAttempts : null,
+        avgLatencyMs:
+          row.avgLatencyMs != null ? Math.round(Number(row.avgLatencyMs)) : null,
+        p95LatencyMs:
+          row.p95LatencyMs != null
+            ? Math.round(Number(row.p95LatencyMs))
+            : null,
+      };
+    });
   }
 }
 

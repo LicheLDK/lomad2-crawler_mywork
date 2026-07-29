@@ -53,6 +53,17 @@ function formatUsd(value: number): string {
   return `$${value.toFixed(4)}`;
 }
 
+function formatLatencyMs(ms: number | null | undefined): string {
+  if (ms == null) return '—';
+  if (ms >= 1000) return `${(ms / 1000).toFixed(1)}s`;
+  return `${ms}ms`;
+}
+
+function formatSuccessRate(rate: number | null | undefined): string {
+  if (rate == null) return '—';
+  return `${(rate * 100).toFixed(1)}%`;
+}
+
 export function AnalyticsPage({ stats }: { stats: StatsOverview | null }) {
   const [searchParams] = useSearchParams();
   const section = searchParams.get('section') || 'search';
@@ -132,6 +143,10 @@ export function AnalyticsPage({ stats }: { stats: StatsOverview | null }) {
       })),
     [stats],
   );
+
+  const siteMetricsRows = stats?.siteMetrics?.sites ?? [];
+  const siteMetricsHours = stats?.siteMetrics?.hours ?? 24;
+  const hasSiteMetrics = siteMetricsRows.length > 0;
 
   /** SearchHistory 상태 분포 — GET /stats → byStatus */
   const searchStatusData = useMemo(
@@ -246,6 +261,9 @@ export function AnalyticsPage({ stats }: { stats: StatsOverview | null }) {
           className={`scroll-mt-4 rounded-2xl ${highlight('sites')}`}
         >
           <Panel eyebrow="Sites" title="사이트별 통계">
+            <p className="mb-3 text-sm text-ink-500">
+              저장된 결과 · GET /stats → bySite
+            </p>
             {siteData.length === 0 ? (
               <p className="text-sm text-ink-500">아직 저장된 결과가 없습니다.</p>
             ) : (
@@ -279,6 +297,58 @@ export function AnalyticsPage({ stats }: { stats: StatsOverview | null }) {
                 </ResponsiveContainer>
               </div>
             )}
+
+            <div className="mt-6 border-t border-ink-100/80 pt-5">
+              <p className="mb-3 text-sm text-ink-500">
+                크롤 시도 지표 · GET /stats → siteMetrics · 최근 {siteMetricsHours}
+                시간
+              </p>
+              {!hasSiteMetrics ? (
+                <p className="text-sm text-ink-500">아직 시도 기록 없음</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[32rem] text-left text-sm">
+                    <thead>
+                      <tr className="border-b border-ink-100/80 text-xs uppercase tracking-wide text-ink-500">
+                        <th className="pb-2 pr-3 font-medium">사이트</th>
+                        <th className="pb-2 pr-3 font-medium">시도</th>
+                        <th className="pb-2 pr-3 font-medium">성공률</th>
+                        <th className="pb-2 pr-3 font-medium">실패</th>
+                        <th className="pb-2 pr-3 font-medium">평균 지연</th>
+                        <th className="pb-2 font-medium">p95 지연</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {siteMetricsRows.map((row) => (
+                        <tr
+                          key={row.siteCode}
+                          className="border-b border-ink-50 last:border-0"
+                        >
+                          <td className="py-2.5 pr-3 font-medium text-ink-900">
+                            {siteLabel(row.siteCode)}
+                          </td>
+                          <td className="py-2.5 pr-3 tabular-nums text-ink-700">
+                            {row.totalAttempts.toLocaleString()}
+                          </td>
+                          <td className="py-2.5 pr-3 tabular-nums text-ink-700">
+                            {formatSuccessRate(row.successRate)}
+                          </td>
+                          <td className="py-2.5 pr-3 tabular-nums text-ink-700">
+                            {row.failCount.toLocaleString()}
+                          </td>
+                          <td className="py-2.5 pr-3 tabular-nums text-ink-700">
+                            {formatLatencyMs(row.avgLatencyMs)}
+                          </td>
+                          <td className="py-2.5 tabular-nums text-ink-700">
+                            {formatLatencyMs(row.p95LatencyMs)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           </Panel>
         </div>
 
