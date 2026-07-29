@@ -34,18 +34,40 @@ export function ResultDrawer({
   onStartInvestigation?: (row: SearchResult, e?: React.SyntheticEvent) => void;
 }) {
   const open = Boolean(row);
+  const [visible, setVisible] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const [copied, setCopied] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
-  const startInvestigationFromResult = useStartInvestigation();
+  const { startInvestigation: startInvestigationFromResult } =
+    useStartInvestigation();
+  const lastRowRef = useRef<SearchResult | null>(null);
+  if (row) lastRowRef.current = row;
 
   function handleClose(e?: React.SyntheticEvent) {
     e?.preventDefault();
     e?.stopPropagation();
-    // 오버레이 제거 직후 같은 클릭이 아래 카드로 전달되는 것 방지
-    window.setTimeout(() => onCloseRef.current(), 0);
+    setVisible(false);
   }
+
+  function handleTransitionEnd() {
+    if (!visible) {
+      setMounted(false);
+      onCloseRef.current();
+    }
+  }
+
+  useEffect(() => {
+    if (open) {
+      setMounted(true);
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => setVisible(true));
+      });
+    } else {
+      setVisible(false);
+    }
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -65,29 +87,34 @@ export function ResultDrawer({
     };
   }, [open, row]);
 
+  const displayRow = row || lastRowRef.current;
+
   const analysis = useMemo(
-    () => (row ? buildAiAnalysis(row, keyword) : null),
-    [row, keyword],
+    () => (displayRow ? buildAiAnalysis(displayRow, keyword) : null),
+    [displayRow, keyword],
   );
 
-  if (!row || typeof document === 'undefined') return null;
+  if (!mounted || !displayRow || typeof document === 'undefined')
+    return null;
 
-  const imageSrc = resolveAssetUrl(row.imageUrl) || row.imageUrl;
+  const activeRow = displayRow;
+
+  const imageSrc = resolveAssetUrl(activeRow.imageUrl) || activeRow.imageUrl;
   const rentalSrc =
     resolveAssetUrl(referenceImageUrl) || referenceImageUrl || null;
   const resultSrc =
-    resolveAssetUrl(row.imageUrl) ||
-    resolveAssetUrl(row.screenshotUrl) ||
-    row.imageUrl ||
+    resolveAssetUrl(activeRow.imageUrl) ||
+    resolveAssetUrl(activeRow.screenshotUrl) ||
+    activeRow.imageUrl ||
     null;
 
   function openOriginalInNewTab() {
-    window.open(row!.url, '_blank', 'noopener,noreferrer');
+    window.open(activeRow.url, '_blank', 'noopener,noreferrer');
   }
 
   async function copyUrl() {
     try {
-      await navigator.clipboard.writeText(row!.url);
+      await navigator.clipboard.writeText(activeRow.url);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1500);
     } catch {
@@ -98,12 +125,12 @@ export function ResultDrawer({
   function startInvestigation(e?: React.SyntheticEvent) {
     e?.preventDefault();
     e?.stopPropagation();
-    if (!row) return;
+    if (!activeRow) return;
     if (onStartInvestigation) {
-      onStartInvestigation(row, e);
+      onStartInvestigation(activeRow, e);
       return;
     }
-    startInvestigationFromResult(row);
+    startInvestigationFromResult(activeRow);
   }
 
   return createPortal(
@@ -112,16 +139,21 @@ export function ResultDrawer({
       role="dialog"
       aria-modal="true"
       aria-label="상품 상세"
+      onTransitionEnd={handleTransitionEnd}
     >
       <button
         type="button"
-        className="absolute inset-0 bg-ink-950/25"
+        className={`absolute inset-0 transition-colors duration-300 ease-out ${
+          visible ? 'bg-ink-950/25' : 'bg-ink-950/0'
+        }`}
         aria-label="닫기"
         onClick={handleClose}
       />
 
       <aside
-        className="relative z-10 flex h-full w-full max-w-md flex-col border-l border-ink-100 bg-[#fbfaf7] shadow-2xl sm:max-w-lg"
+        className={`relative z-10 flex h-full w-full max-w-md flex-col border-l border-ink-100 bg-[#fbfaf7] shadow-2xl transition-transform duration-300 ease-out sm:max-w-lg ${
+          visible ? 'translate-x-0' : 'translate-x-full'
+        }`}
         style={{ maxHeight: '100dvh' }}
         onClick={(e) => e.stopPropagation()}
         onMouseDown={(e) => e.stopPropagation()}
@@ -173,16 +205,16 @@ export function ResultDrawer({
             <div className="mt-3">
               <span
                 className={`inline-flex rounded-md px-2 py-0.5 text-xs ${siteTone(
-                  row.siteCode,
+                  activeRow.siteCode,
                 )}`}
               >
-                {siteLabel(row.siteCode)}
+                {siteLabel(activeRow.siteCode)}
               </span>
               <h4 className="mt-2 text-base font-medium leading-snug text-ink-900">
-                {row.title}
+                {activeRow.title}
               </h4>
               <p className="mt-1 font-display text-xl tabular-nums text-ink-900">
-                {formatPrice(row.price)}
+                {formatPrice(activeRow.price)}
               </p>
             </div>
           </section>
@@ -263,29 +295,29 @@ export function ResultDrawer({
                 <div>
                   <dt className="text-xs text-ink-400">판매 사이트</dt>
                   <dd className="mt-0.5 text-ink-800">
-                    {siteLabel(row.siteCode)}
+                    {siteLabel(activeRow.siteCode)}
                   </dd>
                 </div>
                 <div>
                   <dt className="text-xs text-ink-400">등록일</dt>
                   <dd className="mt-0.5 text-ink-800">
-                    {row.createdAt
-                      ? `${formatRelative(row.createdAt)} (${formatTime(row.createdAt)})`
+                    {activeRow.createdAt
+                      ? `${formatRelative(activeRow.createdAt)} (${formatTime(activeRow.createdAt)})`
                       : '—'}
                   </dd>
                 </div>
                 <div>
                   <dt className="text-xs text-ink-400">판매 지역</dt>
-                  <dd className="mt-0.5 text-ink-800">{row.region || '—'}</dd>
+                  <dd className="mt-0.5 text-ink-800">{activeRow.region || '—'}</dd>
                 </div>
                 <div>
                   <dt className="text-xs text-ink-400">판매자 정보</dt>
-                  <dd className="mt-0.5 text-ink-800">{row.seller || '—'}</dd>
+                  <dd className="mt-0.5 text-ink-800">{activeRow.seller || '—'}</dd>
                 </div>
                 <div>
                   <dt className="text-xs text-ink-400">상품 설명</dt>
                   <dd className="mt-0.5 whitespace-pre-wrap leading-relaxed text-ink-800">
-                    {row.description?.trim() || '—'}
+                    {activeRow.description?.trim() || '—'}
                   </dd>
                 </div>
               </dl>
@@ -298,7 +330,7 @@ export function ResultDrawer({
             </h3>
             <div className="rounded-xl border border-ink-100 bg-white p-3">
               <p className="break-all text-xs leading-relaxed text-ink-600">
-                {row.url}
+                {activeRow.url}
               </p>
             </div>
           </section>

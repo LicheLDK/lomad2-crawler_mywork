@@ -21,9 +21,10 @@ export class ResendCallbackResponseDto {
   callbackSentAt!: Date;
 
   @ApiPropertyOptional({
+    type: String,
     nullable: true,
     description: '성공 시 항상 null',
     example: null,
   })
-  callbackError!: null;
+  callbackError!: string | null;
 }

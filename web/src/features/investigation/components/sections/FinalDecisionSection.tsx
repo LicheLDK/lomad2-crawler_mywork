@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { Ban, CheckCircle2, Search, ShieldAlert } from 'lucide-react';
 import type { FinalDecision, InvestigationCase } from '../../types';
 import { isInvestigationLocked } from '../../lib/workflow';
 import { useInvestigation } from '../../useInvestigation';
@@ -8,49 +7,10 @@ import { formatTime } from '../../../../lib/format';
 import { Badge } from '../../../../components/ui/badge';
 import { ConfirmDialog } from '../../../../components/ui/confirm-dialog';
 import { toast } from '../../../../components/Toast';
-
-export const FINAL_DECISION_OPTIONS: {
-  value: FinalDecision;
-  label: string;
-  description: string;
-  Icon: typeof CheckCircle2;
-  tone: 'teal' | 'amber' | 'rose' | 'ink';
-}[] = [
-  {
-    value: 'resale_confirmed',
-    label: '재판매 확인',
-    description: '무단 재판매로 판정합니다.',
-    Icon: ShieldAlert,
-    tone: 'rose',
-  },
-  {
-    value: 'further_investigation',
-    label: '추가 조사',
-    description: '추가 조사가 필요하나 Case는 완료 처리합니다.',
-    Icon: Search,
-    tone: 'amber',
-  },
-  {
-    value: 'false_positive',
-    label: '오탐',
-    description: 'AI/검색 결과가 오탐으로 판정합니다.',
-    Icon: Ban,
-    tone: 'ink',
-  },
-  {
-    value: 'excluded',
-    label: '제외',
-    description: '조사 대상에서 제외합니다.',
-    Icon: CheckCircle2,
-    tone: 'teal',
-  },
-];
-
-export function finalDecisionLabel(value: FinalDecision | null | undefined) {
-  return (
-    FINAL_DECISION_OPTIONS.find((o) => o.value === value)?.label ?? value ?? '—'
-  );
-}
+import {
+  FINAL_DECISION_OPTIONS,
+  finalDecisionLabel,
+} from './final-decision-options';
 
 const BTN: Record<(typeof FINAL_DECISION_OPTIONS)[number]['tone'], string> = {
   rose: 'border-rose-200 bg-rose-50 text-rose-900 hover:bg-rose-100',

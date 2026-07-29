@@ -68,9 +68,12 @@ export function CaseDrawer({
   row: InvestigationCase | null;
   onClose: () => void;
 }) {
-  const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
+  const open = Boolean(row);
+  const [visible, setVisible] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const [active, setActive] = useState<SectionId>('overview');
+  const [lastRow, setLastRow] = useState<InvestigationCase | null>(null);
+  const onCloseRef = useRef(onClose);
   const refs = useRef<Record<SectionId, HTMLElement | null>>({
     overview: null,
     ai: null,
@@ -80,8 +83,40 @@ export function CaseDrawer({
   });
 
   useEffect(() => {
+    onCloseRef.current = onClose;
+  });
+
+  useEffect(() => {
+    if (row) setLastRow(row);
+  }, [row]);
+
+  function handleClose(e?: React.SyntheticEvent) {
+    e?.preventDefault();
+    e?.stopPropagation();
+    setVisible(false);
+  }
+
+  function handleTransitionEnd() {
+    if (!visible) {
+      setMounted(false);
+      onCloseRef.current();
+    }
+  }
+
+  useEffect(() => {
+    if (open) {
+      setMounted(true);
+      setActive('overview');
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => setVisible(true));
+      });
+    } else {
+      setVisible(false);
+    }
+  }, [open]);
+
+  useEffect(() => {
     if (!row) return;
-    setActive('overview');
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onCloseRef.current();
     };
@@ -94,16 +129,14 @@ export function CaseDrawer({
     };
   }, [row?.id]);
 
-  if (!row || typeof document === 'undefined') return null;
+  const displayRow = row || lastRow;
 
-  const imageSrc = resolveAssetUrl(row.imageUrl) || row.imageUrl || null;
-  const priority = row.priority ?? 'Medium';
+  if (!mounted || !displayRow || typeof document === 'undefined')
+    return null;
 
-  function handleClose(e?: React.SyntheticEvent) {
-    e?.preventDefault();
-    e?.stopPropagation();
-    window.setTimeout(() => onCloseRef.current(), 0);
-  }
+  const r = displayRow;
+  const imageSrc = resolveAssetUrl(r.imageUrl) || r.imageUrl || null;
+  const priority = r.priority ?? 'Medium';
 
   function jump(id: SectionId) {
     setActive(id);
@@ -116,16 +149,21 @@ export function CaseDrawer({
       role="dialog"
       aria-modal="true"
       aria-label="Investigation case"
+      onTransitionEnd={handleTransitionEnd}
     >
       <button
         type="button"
-        className="absolute inset-0 bg-ink-950/25"
+        className={`absolute inset-0 transition-colors duration-300 ease-out ${
+          visible ? 'bg-ink-950/25' : 'bg-ink-950/0'
+        }`}
         aria-label="닫기"
         onClick={handleClose}
       />
 
       <aside
-        className="relative z-10 flex h-full w-full max-w-md flex-col border-l border-ink-100 bg-[#fbfaf7] shadow-2xl sm:max-w-lg"
+        className={`relative z-10 flex h-full w-full max-w-md flex-col border-l border-ink-100 bg-[#fbfaf7] shadow-2xl transition-transform duration-300 ease-out sm:max-w-lg ${
+          visible ? 'translate-x-0' : 'translate-x-full'
+        }`}
         style={{ maxHeight: '100dvh' }}
         onClick={(e) => e.stopPropagation()}
         onMouseDown={(e) => e.stopPropagation()}
@@ -137,10 +175,10 @@ export function CaseDrawer({
               Case
             </p>
             <h2 className="mt-1 font-display text-xl tabular-nums text-ink-900">
-              {row.caseNo}
+              {r.caseNo}
             </h2>
             <p className="mt-1 truncate text-sm text-ink-600">
-              {row.productName}
+              {r.productName}
             </p>
           </div>
           <Button
@@ -187,38 +225,38 @@ export function CaseDrawer({
               <CardContent className="p-4">
                 <dl className="grid grid-cols-2 gap-3">
                   <Field label="Case 번호">
-                    <span className="font-medium tabular-nums">{row.caseNo}</span>
+                    <span className="font-medium tabular-nums">{r.caseNo}</span>
                   </Field>
                   <Field label="상태">
-                    <StatusBadge status={row.status} />
+                    <StatusBadge status={r.status} />
                   </Field>
-                  <Field label="담당자">{row.assignee || '미지정'}</Field>
+                  <Field label="담당자">{r.assignee || '미지정'}</Field>
                   <Field label="우선순위">
                     <Badge variant={priorityBadgeVariant(priority)}>
                       {priority}
                     </Badge>
                   </Field>
                   <Field label="마감일">
-                    {row.dueDate ? formatTime(row.dueDate) : '미설정'}
+                    {r.dueDate ? formatTime(r.dueDate) : '미설정'}
                   </Field>
-                  <Field label="생성일">{formatTime(row.createdAt)}</Field>
+                  <Field label="생성일">{formatTime(r.createdAt)}</Field>
                   <Field label="사이트">
                     <span
                       className={`inline-flex rounded-md px-2 py-0.5 text-xs ${siteTone(
-                        row.siteCode,
+                        r.siteCode,
                       )}`}
                     >
-                      {siteLabel(row.siteCode)}
+                      {siteLabel(r.siteCode)}
                     </span>
                   </Field>
                 </dl>
               </CardContent>
             </Card>
 
-            <InvestigationOrderPanel row={row} />
+            <InvestigationOrderPanel row={r} />
 
-            <InvestigationWorkflowPanel row={row} />
-            <InvestigationAssignmentPanel row={row} />
+            <InvestigationWorkflowPanel row={r} />
+            <InvestigationAssignmentPanel row={r} />
 
             <section className="space-y-3">
               <h3 className="text-xs font-medium uppercase tracking-[0.14em] text-ink-500">
@@ -229,7 +267,7 @@ export function CaseDrawer({
                   {imageSrc ? (
                     <img
                       src={imageSrc}
-                      alt={row.listingTitle || row.productName}
+                      alt={r.listingTitle || r.productName}
                       className="h-full w-full object-cover"
                       onError={(e) => {
                         (e.currentTarget as HTMLImageElement).style.display =
@@ -246,33 +284,33 @@ export function CaseDrawer({
                 <CardContent className="space-y-3 p-4">
                   <Field label="매물 제목">
                     <span className="font-medium text-ink-900">
-                      {row.listingTitle || row.productName}
+                      {r.listingTitle || r.productName}
                     </span>
                   </Field>
                   <div className="grid grid-cols-2 gap-3">
-                    <Field label="가격">{formatPrice(row.price)}</Field>
+                    <Field label="가격">{formatPrice(r.price)}</Field>
                     <Field label="사이트">
                       <span
                         className={`inline-flex rounded-md px-2 py-0.5 text-xs ${siteTone(
-                          row.siteCode,
+                          r.siteCode,
                         )}`}
                       >
-                        {siteLabel(row.siteCode)}
+                        {siteLabel(r.siteCode)}
                       </span>
                     </Field>
                   </div>
                   <Field label="등록일">
-                    {formatTime(row.listedAt ?? null)}
+                    {formatTime(r.listedAt ?? null)}
                   </Field>
                   <Field label="원본 URL">
-                    {row.url ? (
+                    {r.url ? (
                       <a
-                        href={row.url}
+                        href={r.url}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="break-all text-teal-700 underline-offset-2 hover:underline"
                       >
-                        {row.url}
+                        {r.url}
                       </a>
                     ) : (
                       '—'
@@ -291,9 +329,9 @@ export function CaseDrawer({
             }}
             className="scroll-mt-2 space-y-5"
           >
-            <InvestigationAiPanel row={row} />
-            <InvestigationSummaryPanel row={row} />
-            <InvestigationRecommendationPanel row={row} />
+            <InvestigationAiPanel row={r} />
+            <InvestigationSummaryPanel row={r} />
+            <InvestigationRecommendationPanel row={r} />
           </section>
 
           <Separator />
@@ -304,7 +342,7 @@ export function CaseDrawer({
             }}
             className="scroll-mt-2"
           >
-            <InvestigationTimeline events={row.timeline ?? []} />
+            <InvestigationTimeline events={r.timeline ?? []} />
           </section>
 
           <Separator />
@@ -315,7 +353,7 @@ export function CaseDrawer({
             }}
             className="scroll-mt-2"
           >
-            <InvestigationEvidencePanel row={row} readOnly />
+            <InvestigationEvidencePanel row={r} readOnly />
           </section>
 
           <Separator />
@@ -326,20 +364,20 @@ export function CaseDrawer({
             }}
             className="scroll-mt-2 space-y-5"
           >
-            <InvestigationNotesPanel row={row} />
-            <InvestigationFinalDecisionPanel row={row} />
+            <InvestigationNotesPanel row={r} />
+            <InvestigationFinalDecisionPanel row={r} />
           </section>
         </div>
 
         <footer className="shrink-0 border-t border-ink-100 px-5 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           <div className="flex gap-2">
-            {row.url ? (
+            {r.url ? (
               <Button
                 type="button"
                 variant="teal"
                 className="flex-1"
                 onClick={() =>
-                  window.open(row.url!, '_blank', 'noopener,noreferrer')
+                  window.open(r.url!, '_blank', 'noopener,noreferrer')
                 }
               >
                 원본 보기

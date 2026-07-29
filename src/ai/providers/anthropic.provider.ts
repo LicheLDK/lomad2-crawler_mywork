@@ -22,6 +22,10 @@ export class AnthropicProvider implements AiProvider {
     return Boolean(this.config.get<string>('ai.anthropic.apiKey'));
   }
 
+  isImplemented(): boolean {
+    return false;
+  }
+
   async complete(
     _request: AiCompletionRequest,
   ): Promise<AiCompletionResponse> {

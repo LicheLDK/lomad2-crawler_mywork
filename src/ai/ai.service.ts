@@ -87,14 +87,14 @@ export class AiService {
     return this.config.get<boolean>('ai.enabled') === true;
   }
 
-  /** Keyword Generator 사용 가능 (키 설정 + AI_ENABLED) */
+  /** Keyword Generator 사용 가능 (키 설정 + AI_ENABLED + 실제 구현) */
   canGenerateKeywords(): boolean {
-    return this.isEnabled() && this.provider.isConfigured();
+    return this.isEnabled() && this.provider.isConfigured() && this.provider.isImplemented();
   }
 
   /** Matching Engine 사용 가능 */
   canMatch(): boolean {
-    return this.isEnabled() && this.provider.isConfigured();
+    return this.isEnabled() && this.provider.isConfigured() && this.provider.isImplemented();
   }
 
   async complete(
@@ -161,7 +161,8 @@ export class AiService {
         const responseTimeMs = Date.now() - started;
         const message =
           error instanceof Error ? error.message : String(error);
-        const willRetry = attempt < maxRetries;
+        const retryable = this.isRetryable(error);
+        const willRetry = retryable && attempt < maxRetries;
 
         if (!willRetry) {
           void this.costService.record({
@@ -191,6 +192,39 @@ export class AiService {
     throw lastError instanceof Error
       ? lastError
       : new AiEngineError('AI complete failed', 'PROVIDER_ERROR');
+  }
+
+  private isRetryable(error: unknown): boolean {
+    if (error instanceof AiEngineError) {
+      return (
+        error.code === 'RATE_LIMITED' ||
+        error.code === 'PROVIDER_UNAVAILABLE'
+      );
+    }
+
+    if (error instanceof Error) {
+      const cause = (error as any).cause as Record<string, unknown> | undefined;
+      if (cause && typeof cause === 'object') {
+        const status = (cause as { status?: number }).status;
+        if (typeof status === 'number') {
+          if (status === 429 || status >= 500) return true;
+          if (status >= 400 && status < 500) return false;
+        }
+      }
+
+      const networkCodes = [
+        'ECONNREFUSED',
+        'ECONNRESET',
+        'ETIMEDOUT',
+        'ENOTFOUND',
+      ];
+      const errCode = (error as NodeJS.ErrnoException).code;
+      if (errCode && networkCodes.includes(errCode)) return true;
+
+      if (error.name === 'AbortError') return true;
+    }
+
+    return false;
   }
 
   /**
@@ -226,11 +260,28 @@ export class AiService {
    * Matching Logic (항목 점수 · AI Score) 은 이 메서드에서 수행
    */
   async matchListing(input: AiMatchingInput): Promise<AiMatchingResult> {
+    let ocrAnalysis: AiOcrResult | null = null;
+    const ocrBeforeMatch = this.config.get<boolean>('ai.ocrBeforeMatch') === true;
+
+    if (ocrBeforeMatch && input.listing.ocrText?.trim()) {
+      try {
+        ocrAnalysis = await this.analyzeOcr({
+          rawText: input.listing.ocrText,
+          siteCode: input.listing.siteCode ?? undefined,
+        });
+      } catch (err) {
+        this.logger.warn(
+          `OCR pre-analysis failed (ignored): ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    }
+
     const prompt = this.promptManager.render(
       'matching',
       buildMatchingPromptVars({
         rental: input.rental,
         listing: input.listing,
+        ocrAnalysis,
       }),
     );
     const response = await this.complete({
@@ -481,12 +532,12 @@ export class AiService {
   }
 
   canAnalyzeInvestigation(): boolean {
-    return this.isEnabled() && this.provider.isConfigured();
+    return this.isEnabled() && this.provider.isConfigured() && this.provider.isImplemented();
   }
 
-  /** Vision Image Analysis 사용 가능 (Interface stub 단계에서도 키 유무 판별) */
+  /** Vision Image Analysis 사용 가능 (실제 구현 provider 만 true) */
   canCompareImages(): boolean {
-    return this.isEnabled() && this.visionProvider.isConfigured();
+    return this.isEnabled() && this.visionProvider.isConfigured() && this.visionProvider.isImplemented();
   }
 
   /**
@@ -516,7 +567,6 @@ export class AiService {
       );
     }
 
-    // Prompt → Vision Provider → Cost (Text complete 와 동일 구조)
     const prompt = this.promptManager.render(
       'image',
       buildImagePromptVars({
@@ -525,50 +575,90 @@ export class AiService {
         productHint: input.productHint,
       }),
     );
+    const promptText = `${prompt.system}\n\n${prompt.user}`;
 
-    const started = Date.now();
-    try {
-      this.logger.debug(
-        `AI Vision compare provider=${this.visionProvider.name} prompt=v${prompt.version}`,
-      );
-      const result = await this.visionProvider.compareImages(input);
-      void this.costService.record({
-        provider: result.provider,
-        model: result.model || 'vision',
-        task: 'image',
-        prompt: `${prompt.system}\n\n${prompt.user}`,
-        response: result.reason,
-        responseTimeMs: Date.now() - started,
-        retryCount: 0,
-        success: true,
-        metadata: {
-          pipeline: 'image',
-          promptVersion: prompt.version,
-          imageSimilarity: result.imageSimilarity,
-        },
-      });
-      return result;
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : String(error);
-      void this.costService.record({
-        provider: this.visionProvider.name,
-        model: input.model || 'vision',
-        task: 'image',
-        prompt: `${prompt.system}\n\n${prompt.user}`,
-        responseTimeMs: Date.now() - started,
-        retryCount: 0,
-        success: false,
-        errorMessage: message,
-        metadata: { pipeline: 'image', promptVersion: prompt.version },
-      });
-      throw error;
+    const maxRetries = Math.max(
+      0,
+      this.config.get<number>('ai.maxRetries') ?? 2,
+    );
+    const retryDelayMs = Math.max(
+      0,
+      this.config.get<number>('ai.retryDelayMs') ?? 500,
+    );
+
+    this.logger.debug(
+      `AI Vision compare provider=${this.visionProvider.name} prompt=v${prompt.version} maxRetries=${maxRetries}`,
+    );
+
+    let attempt = 0;
+    let lastError: unknown;
+
+    while (attempt <= maxRetries) {
+      const started = Date.now();
+      try {
+        const result = await this.visionProvider.compareImages(input, {
+          systemPrompt: prompt.system,
+          userPrompt: prompt.user,
+        });
+        void this.costService.record({
+          provider: result.provider,
+          model: result.model || 'vision',
+          task: 'image',
+          promptTokens: result.usage?.promptTokens,
+          completionTokens: result.usage?.completionTokens,
+          prompt: promptText,
+          response: result.reason,
+          responseTimeMs: Date.now() - started,
+          retryCount: attempt,
+          success: true,
+          metadata: {
+            pipeline: 'image',
+            promptVersion: prompt.version,
+            imageSimilarity: result.imageSimilarity,
+          },
+        });
+        return result;
+      } catch (error) {
+        lastError = error;
+        const responseTimeMs = Date.now() - started;
+        const message =
+          error instanceof Error ? error.message : String(error);
+        const retryable = this.isRetryable(error);
+        const willRetry = retryable && attempt < maxRetries;
+
+        if (!willRetry) {
+          void this.costService.record({
+            provider: this.visionProvider.name,
+            model: input.model || 'vision',
+            task: 'image',
+            prompt: promptText,
+            responseTimeMs,
+            retryCount: attempt,
+            success: false,
+            errorMessage: message,
+            metadata: { pipeline: 'image', promptVersion: prompt.version },
+          });
+          throw error;
+        }
+
+        this.logger.warn(
+          `AI Vision compare retry attempt=${attempt + 1}/${maxRetries} err=${message}`,
+        );
+        attempt += 1;
+        if (retryDelayMs > 0) {
+          await sleep(retryDelayMs * attempt);
+        }
+      }
     }
+
+    throw lastError instanceof Error
+      ? lastError
+      : new AiEngineError('AI Vision compare failed', 'PROVIDER_ERROR');
   }
 
   /** OCR Analysis 사용 가능 */
   canAnalyzeOcr(): boolean {
-    return this.isEnabled() && this.provider.isConfigured();
+    return this.isEnabled() && this.provider.isConfigured() && this.provider.isImplemented();
   }
 
   /**
@@ -623,7 +713,29 @@ export class AiService {
 
   /** Report Generator 사용 가능 */
   canGenerateReport(): boolean {
-    return this.isEnabled() && this.provider.isConfigured();
+    return this.isEnabled() && this.provider.isConfigured() && this.provider.isImplemented();
+  }
+
+  /** AI Health 상태 반환 */
+  getHealthStatus() {
+    return {
+      enabled: this.isEnabled(),
+      provider: {
+        name: this.provider.name,
+        configured: this.provider.isConfigured(),
+        implemented: this.provider.isImplemented(),
+      },
+      visionProvider: {
+        name: this.visionProvider.name,
+        configured: this.visionProvider.isConfigured(),
+        implemented: this.visionProvider.isImplemented(),
+      },
+      capabilities: {
+        match: this.canMatch(),
+        investigate: this.canAnalyzeInvestigation(),
+        vision: this.canCompareImages(),
+      },
+    };
   }
 
   /**

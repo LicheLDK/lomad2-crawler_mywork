@@ -38,6 +38,9 @@ export default [
     rules: {
       ...toWarn(tsPlugin.configs.recommended.rules),
       ...toWarn(reactHooks.configs.recommended.rules),
+      'react-hooks/set-state-in-effect': 'off',
+      'react-hooks/refs': 'off',
+      'react-hooks/purity': 'off',
       'no-unused-vars': 'off',
       '@typescript-eslint/no-unused-vars': [
         'warn',

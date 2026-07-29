@@ -22,8 +22,13 @@ export class AnthropicVisionProvider implements AiVisionProvider {
     return Boolean(this.config.get<string>('ai.anthropic.apiKey')?.trim());
   }
 
+  isImplemented(): boolean {
+    return false;
+  }
+
   async compareImages(
     _request: AiImageCompareRequest,
+    _options?: { systemPrompt?: string; userPrompt?: string },
   ): Promise<AiImageCompareResponse> {
     throw new AiEngineError(
       'Anthropic Vision Provider is interface-only (STEP AI-06). Real Vision API not implemented yet.',

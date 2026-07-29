@@ -38,8 +38,11 @@ function NoteEditor({
   );
   const lastSaved = useRef(initial);
   const onSaveRef = useRef(onSave);
-  onSaveRef.current = onSave;
   const timer = useRef<number | null>(null);
+
+  useEffect(() => {
+    onSaveRef.current = onSave;
+  });
 
   useEffect(() => {
     setBody(initial);

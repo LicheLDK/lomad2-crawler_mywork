@@ -16,9 +16,13 @@ export interface AiVisionProvider {
 
   compareImages(
     request: AiImageCompareRequest,
+    options?: { systemPrompt?: string; userPrompt?: string },
   ): Promise<AiImageCompareResponse>;
 
   isConfigured(): boolean;
+
+  /** 실제 API 호출이 구현되어 있는지 여부 (stub → false) */
+  isImplemented(): boolean;
 }
 
 /** Nest DI 토큰 — AiService 만 주입 */

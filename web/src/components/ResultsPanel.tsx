@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
-import { ShieldAlert } from 'lucide-react';
+import { Loader2, ShieldAlert } from 'lucide-react';
 import type { SearchDetail, SearchResult } from '../types';
 import { resolveAssetUrl } from '../api';
 import {
@@ -84,7 +84,8 @@ export function ResultsPanel({
   const [selected, setSelected] = useState<SearchResult | null>(null);
   /** Drawer 닫힌 직후 같은 클릭이 카드로 전달되어 다시 열리는 것 방지 */
   const ignoreSelectUntil = useRef(0);
-  const startInvestigationFromResult = useStartInvestigation();
+  const { startInvestigation: startInvestigationFromResult, loadingIds } =
+    useStartInvestigation();
 
   function openDetail(row: SearchResult) {
     if (Date.now() < ignoreSelectUntil.current) return;
@@ -397,11 +398,16 @@ export function ResultsPanel({
                 <div className="mt-auto space-y-2 pt-3">
                   <button
                     type="button"
+                    disabled={loadingIds.has(row.id)}
                     onClick={(e) => startInvestigation(row, e)}
-                    className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-teal-600/30 bg-teal-50 px-3 py-2 text-sm font-medium text-teal-800 transition hover:bg-teal-100"
+                    className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-teal-600/30 bg-teal-50 px-3 py-2 text-sm font-medium text-teal-800 transition hover:bg-teal-100 disabled:opacity-60 disabled:cursor-not-allowed"
                   >
-                    <ShieldAlert className="h-3.5 w-3.5" />
-                    조사 시작
+                    {loadingIds.has(row.id) ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <ShieldAlert className="h-3.5 w-3.5" />
+                    )}
+                    {loadingIds.has(row.id) ? '조사 준비 중…' : '조사 시작'}
                   </button>
                   <div className="text-sm font-medium text-teal-700 transition group-hover:text-teal-600">
                     상세 · AI 분석 →

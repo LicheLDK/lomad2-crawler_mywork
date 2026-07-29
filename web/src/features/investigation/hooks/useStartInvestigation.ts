@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { api, formatApiError } from '../../../api';
 import type { SearchResult } from '../../../types';
 import { toast } from '../../../components/Toast';
@@ -20,14 +20,16 @@ export type StartInvestigationOptions = {
 export function useStartInvestigation() {
   const { openCase, applyServerCase } = useInvestigation();
   const inflight = useRef<Set<string>>(new Set());
+  const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set());
 
-  return useCallback(
+  const startInvestigation = useCallback(
     async function startInvestigation(
       row: SearchResult,
       options?: StartInvestigationOptions,
     ): Promise<InvestigationCase | null> {
       if (inflight.current.has(row.id)) return null;
       inflight.current.add(row.id);
+      setLoadingIds((prev) => new Set(prev).add(row.id));
       try {
         const dto = await api.createInvestigation({
           resultId: row.id,
@@ -46,8 +48,15 @@ export function useStartInvestigation() {
         return null;
       } finally {
         inflight.current.delete(row.id);
+        setLoadingIds((prev) => {
+          const next = new Set(prev);
+          next.delete(row.id);
+          return next;
+        });
       }
     },
     [applyServerCase, openCase],
   );
+
+  return { startInvestigation, loadingIds };
 }

@@ -14,6 +14,7 @@ import { AiPromptsController } from './prompt/ai-prompts.controller';
 import { PromptManagerService } from './prompt/prompt-manager.service';
 import { AiRuleEngineService } from './rules/ai-rule-engine.service';
 import { AiRulesController } from './rules/ai-rules.controller';
+import { AiHealthController } from './ai-health.controller';
 import type { AiProviderName } from './ai.types';
 import { AnthropicProvider } from './providers/anthropic.provider';
 import { AnthropicVisionProvider } from './providers/anthropic.vision.provider';
@@ -38,7 +39,7 @@ import { OpenAiVisionProvider } from './providers/openai.vision.provider';
       AiPromptHistory,
     ]),
   ],
-  controllers: [AiUsageController, AiRulesController, AiPromptsController],
+  controllers: [AiUsageController, AiRulesController, AiPromptsController, AiHealthController],
   providers: [
     OpenAiProvider,
     AnthropicProvider,

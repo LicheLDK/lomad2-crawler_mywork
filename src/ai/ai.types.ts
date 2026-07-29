@@ -307,6 +307,10 @@ export interface AiImageCompareResponse {
   reason: string;
   model?: string;
   raw?: unknown;
+  usage?: {
+    promptTokens: number;
+    completionTokens: number;
+  };
 }
 
 /** OCR Analysis — 원문 OCR → 정규화·필드 추출 */
@@ -345,7 +349,10 @@ export class AiEngineError extends Error {
       | 'NOT_IMPLEMENTED'
       | 'PROVIDER_UNAVAILABLE'
       | 'INVALID_REQUEST'
-      | 'PROVIDER_ERROR' = 'PROVIDER_ERROR',
+      | 'PROVIDER_ERROR'
+      | 'RATE_LIMITED'
+      | 'CONTENT_FILTER'
+      | 'TOKEN_LIMIT' = 'PROVIDER_ERROR',
   ) {
     super(message);
     this.name = 'AiEngineError';

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { Search } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import type { InvestigationCase, InvestigationStatus } from '../types';
@@ -28,31 +28,23 @@ export function CaseListPage() {
   const { cases, selectedId, openCase, loading, error, reload } =
     useInvestigation();
   const [searchParams, setSearchParams] = useSearchParams();
+
   const statusFromUrl = searchParams.get('status');
-  const initialStatus = isValidStatus(statusFromUrl) ? statusFromUrl : DEFAULT_STATUS;
+  const statusFilter: InvestigationStatus | '' = isValidStatus(statusFromUrl)
+    ? statusFromUrl
+    : DEFAULT_STATUS;
 
   const [query, setQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<InvestigationStatus | ''>(
-    initialStatus,
-  );
   const [siteFilter, setSiteFilter] = useState('');
   const ignoreSelectUntil = useRef(0);
 
-  useEffect(() => {
-    const s = searchParams.get('status');
-    if (isValidStatus(s)) {
-      setStatusFilter(s);
-      return;
-    }
-    setStatusFilter(DEFAULT_STATUS);
-    setSearchParams({ status: DEFAULT_STATUS }, { replace: true });
-  }, [searchParams, setSearchParams]);
-
-  function onStatusChange(value: InvestigationStatus | '') {
-    const next = value || DEFAULT_STATUS;
-    setStatusFilter(next);
-    setSearchParams({ status: next }, { replace: true });
-  }
+  const onStatusChange = useCallback(
+    (value: InvestigationStatus | '') => {
+      const next = value || DEFAULT_STATUS;
+      setSearchParams({ status: next }, { replace: true });
+    },
+    [setSearchParams],
+  );
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -68,10 +60,13 @@ export function CaseListPage() {
     });
   }, [cases, query, statusFilter, siteFilter]);
 
-  function onOpen(row: InvestigationCase) {
-    if (Date.now() < ignoreSelectUntil.current) return;
-    openCase(row);
-  }
+  const onOpen = useCallback(
+    (row: InvestigationCase) => {
+      if (performance.now() < ignoreSelectUntil.current) return;
+      openCase(row);
+    },
+    [openCase],
+  );
 
   return (
     <div className="animate-fadeUp space-y-5">

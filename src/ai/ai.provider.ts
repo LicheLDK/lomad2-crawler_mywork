@@ -18,6 +18,9 @@ export interface AiProvider {
 
   /** Provider 사용 가능 여부 (키/설정) */
   isConfigured(): boolean;
+
+  /** 실제 API 호출이 구현되어 있는지 여부 (stub → false) */
+  isImplemented(): boolean;
 }
 
 /** Nest DI 토큰 — AiService 만 이 Provider 를 주입받는다 */

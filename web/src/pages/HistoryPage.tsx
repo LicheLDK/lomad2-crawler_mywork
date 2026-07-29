@@ -56,7 +56,7 @@ export function HistoryPage({
   deletingId?: string | null;
 }) {
   const [tab, setTab] = useState<HistoryTab>('recent');
-  const recent = stats?.recentSearches ?? [];
+  const recent = useMemo(() => stats?.recentSearches ?? [], [stats?.recentSearches]);
 
   const items = useMemo(() => {
     if (tab === 'recent') return recent;

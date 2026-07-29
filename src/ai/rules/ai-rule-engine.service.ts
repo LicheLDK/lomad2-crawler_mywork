@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -101,6 +101,43 @@ export class AiRuleEngineService implements OnModuleInit {
 
   async listAll(): Promise<AiRule[]> {
     return this.ruleRepo.find({ order: { priority: 'DESC', code: 'ASC' } });
+  }
+
+  async updateRule(
+    code: string,
+    dto: { enabled?: boolean; value?: Record<string, any> },
+  ): Promise<AiRule> {
+    const rule = await this.ruleRepo.findOne({ where: { code } });
+    if (!rule) throw new NotFoundException(`Rule not found: ${code}`);
+
+    if (dto.enabled !== undefined) rule.enabled = dto.enabled;
+    if (dto.value !== undefined) {
+      if (dto.value.value !== undefined && Number.isFinite(Number(dto.value.value))) {
+        rule.value = Number(dto.value.value);
+      }
+      if (dto.value.priority !== undefined && Number.isFinite(Number(dto.value.priority))) {
+        rule.priority = Number(dto.value.priority);
+      }
+      if (typeof dto.value.message === 'string') {
+        rule.message = dto.value.message;
+      }
+    }
+
+    const saved = await this.ruleRepo.save(rule);
+    this.configRulesCache = null;
+    return saved;
+  }
+
+  async updateCreateThreshold(threshold: number): Promise<AiRule> {
+    const rule = await this.ruleRepo.findOne({
+      where: { action: 'create_investigation' },
+    });
+    if (!rule) throw new NotFoundException('create_investigation rule not found');
+
+    rule.value = Math.max(0, Math.min(100, Math.round(threshold)));
+    const saved = await this.ruleRepo.save(rule);
+    this.configRulesCache = null;
+    return saved;
   }
 
   /**

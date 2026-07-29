@@ -39,6 +39,10 @@ export class OpenAiProvider implements AiProvider {
     return Boolean(this.config.get<string>('ai.openai.apiKey')?.trim());
   }
 
+  isImplemented(): boolean {
+    return true;
+  }
+
   async complete(
     request: AiCompletionRequest,
   ): Promise<AiCompletionResponse> {

@@ -22,6 +22,10 @@ export class GeminiProvider implements AiProvider {
     return Boolean(this.config.get<string>('ai.gemini.apiKey'));
   }
 
+  isImplemented(): boolean {
+    return false;
+  }
+
   async complete(
     _request: AiCompletionRequest,
   ): Promise<AiCompletionResponse> {

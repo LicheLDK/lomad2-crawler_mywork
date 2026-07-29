@@ -67,7 +67,6 @@ export function InvestigationProvider({ children }: { children: ReactNode }) {
 
   // 서버 목록 동기화 (외부 시스템). focus/visibility에서도 silent 재조회.
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- mount 시 서버 fetch
     void fetchCases();
 
     const onFocus = () => void fetchCases({ silent: true });
