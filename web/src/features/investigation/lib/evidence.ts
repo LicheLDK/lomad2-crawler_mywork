@@ -41,6 +41,11 @@ export const TIMELINE_KIND_TITLE: Record<TimelineEventKind, string> = {
   search_run: '검색 실행',
   ai_analysis: 'AI 분석 완료',
   investigation_created: 'Investigation 생성',
+  ai_rule_warning: 'AI Rule Warning',
+  order_mapped: '주문 참조 연결',
+  investigation_summary: 'Investigation Summary',
+  judgment_reasons: '판단 근거',
+  ai_recommendation: 'AI Recommendation',
   assignee_set: '담당자 지정',
   note_added: '메모 작성',
   status_changed: '상태 변경',
@@ -70,7 +75,10 @@ export function repairTimelineEvent(
   ev: InvestigationTimelineEvent,
 ): InvestigationTimelineEvent {
   if (!ev.kind) return ev;
-  const canonical = TIMELINE_KIND_TITLE[ev.kind];
+  const canonical =
+    ev.kind in TIMELINE_KIND_TITLE
+      ? TIMELINE_KIND_TITLE[ev.kind as TimelineEventKind]
+      : undefined;
   if (!canonical) return ev;
   if (!looksMojibake(ev.title)) return ev;
 

@@ -4,9 +4,28 @@ import type {
   InvestigationCase,
 } from '../types';
 
+const AI_ANALYSIS_KEYS: (keyof InvestigationAiAnalysis)[] = [
+  'imageSimilarity',
+  'titleSimilarity',
+  'brandMatch',
+  'modelMatch',
+  'priceSimilarity',
+  'ocrMatch',
+];
+
 function clamp01(n: number) {
   if (!Number.isFinite(n)) return 0;
   return Math.max(0, Math.min(1, n));
+}
+
+/** 6개 메트릭이 모두 있으면 완전한 InvestigationAiAnalysis */
+export function isCompleteAiAnalysis(
+  value: Partial<InvestigationAiAnalysis> | undefined | null,
+): value is InvestigationAiAnalysis {
+  if (!value) return false;
+  return AI_ANALYSIS_KEYS.every(
+    (k) => typeof value[k] === 'number' && Number.isFinite(value[k] as number),
+  );
 }
 
 /** AI 종합 판단 라벨 (Analysis 패널용) */
@@ -32,6 +51,23 @@ export function deriveAiAnalysis(
     priceSimilarity: clamp01(partial?.priceSimilarity ?? base * 0.75 + 0.1),
     ocrMatch: clamp01(partial?.ocrMatch ?? base * 0.85),
   };
+}
+
+/**
+ * D6: 서버 aiAnalysis 가 완전하면 그대로, 부분만 있거나 없으면 derive fallback.
+ */
+export function resolveAiAnalysis(row: InvestigationCase): InvestigationAiAnalysis {
+  if (isCompleteAiAnalysis(row.aiAnalysis)) {
+    return {
+      imageSimilarity: clamp01(row.aiAnalysis.imageSimilarity),
+      titleSimilarity: clamp01(row.aiAnalysis.titleSimilarity),
+      brandMatch: clamp01(row.aiAnalysis.brandMatch),
+      modelMatch: clamp01(row.aiAnalysis.modelMatch),
+      priceSimilarity: clamp01(row.aiAnalysis.priceSimilarity),
+      ocrMatch: clamp01(row.aiAnalysis.ocrMatch),
+    };
+  }
+  return deriveAiAnalysis(row.aiScore, row.aiAnalysis);
 }
 
 export function toPct(score: number) {

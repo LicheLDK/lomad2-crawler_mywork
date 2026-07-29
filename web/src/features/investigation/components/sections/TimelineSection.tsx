@@ -1,12 +1,16 @@
 import {
+  AlertTriangle,
   Bot,
   CheckCircle2,
   ClipboardList,
   FileSearch,
   FolderPlus,
+  Link2,
+  ListChecks,
   NotebookPen,
   Search,
   ShieldCheck,
+  Sparkles,
   UserPlus,
 } from 'lucide-react';
 import { formatTime } from '../../../../lib/format';
@@ -40,6 +44,27 @@ const EVENT_META: Record<
     tone: 'teal',
     Icon: FolderPlus,
   },
+  ai_rule_warning: {
+    label: 'Rule',
+    tone: 'rose',
+    Icon: AlertTriangle,
+  },
+  order_mapped: { label: '주문', tone: 'sky', Icon: Link2 },
+  investigation_summary: {
+    label: 'Summary',
+    tone: 'amber',
+    Icon: Sparkles,
+  },
+  judgment_reasons: {
+    label: '근거',
+    tone: 'amber',
+    Icon: ListChecks,
+  },
+  ai_recommendation: {
+    label: '추천',
+    tone: 'emerald',
+    Icon: Sparkles,
+  },
   assignee_set: { label: '담당', tone: 'sky', Icon: UserPlus },
   note_added: { label: '메모', tone: 'default', Icon: NotebookPen },
   status_changed: {
@@ -60,8 +85,10 @@ const EVENT_META: Record<
   completed: { label: '완료', tone: 'emerald', Icon: CheckCircle2 },
 };
 
-function eventMeta(kind: TimelineEventKind | undefined) {
-  if (kind && EVENT_META[kind]) return EVENT_META[kind];
+function eventMeta(kind: string | undefined) {
+  if (kind && kind in EVENT_META) {
+    return EVENT_META[kind as TimelineEventKind];
+  }
   return {
     label: '기타',
     tone: 'teal' as const,

@@ -38,6 +38,11 @@ export type TimelineEventKind =
   | 'search_run'
   | 'ai_analysis'
   | 'investigation_created'
+  | 'ai_rule_warning'
+  | 'order_mapped'
+  | 'investigation_summary'
+  | 'judgment_reasons'
+  | 'ai_recommendation'
   | 'assignee_set'
   | 'note_added'
   | 'status_changed'
@@ -53,7 +58,8 @@ export type FinalDecision =
 
 export type InvestigationTimelineEvent = {
   id: string;
-  kind: TimelineEventKind;
+  /** 서버는 kind 를 string 으로 저장. 알 수 없는 kind 도 허용. */
+  kind: TimelineEventKind | string;
   at: string;
   title: string;
   detail?: string | null;
@@ -99,9 +105,11 @@ export type InvestigationCase = {
   /** @deprecated noteEntries 사용 */
   notes?: string | null;
   noteEntries?: InvestigationNote[];
-  aiAnalysis?: InvestigationAiAnalysis;
+  /** 서버 메트릭(0~1). 부분만 올 수 있음 → 섹션에서 deriveAi* fallback */
+  aiAnalysis?: Partial<InvestigationAiAnalysis>;
   timeline?: InvestigationTimelineEvent[];
   evidence?: InvestigationEvidence[];
+  /** D-3 이전 서버 미제공 — 매퍼에서 null */
   finalDecision?: FinalDecision | null;
   decidedAt?: string | null;
   /** Investigation Summary (AI Analysis) — Recommendation 과 분리 */
@@ -162,12 +170,25 @@ export type ServerInvestigationDto = {
   searchHistoryId?: string | null;
   searchJobId?: string | null;
   autoCreated?: boolean;
-  timeline?: InvestigationTimelineEvent[];
-  aiAnalysis?: InvestigationAiAnalysis | null;
+  timeline?: Array<{
+    id?: string;
+    kind?: string;
+    at?: string;
+    title?: string;
+    detail?: string | null;
+  }>;
+  aiAnalysis?: Partial<InvestigationAiAnalysis> | null;
   investigationSummary?: string | null;
   judgmentReasons?: string[] | null;
   aiRecommendation?: InvestigationAiRecommendation | null;
-  createdAt: string;
+  /** D-3 이후 optional — 매퍼는 부재 시 빈 값 */
+  notes?: unknown;
+  noteEntries?: unknown;
+  finalDecision?: string | null;
+  finalDecisionNote?: string | null;
+  decidedAt?: string | null;
+  dueDate?: string | null;
+  createdAt: string | Date;
 };
 
 export type InvestigationListResponse = {

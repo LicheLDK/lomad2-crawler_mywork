@@ -5,7 +5,7 @@ import type {
 import {
   aiJudgmentLabel,
   clampScore,
-  deriveAiAnalysis,
+  resolveAiAnalysis,
   toPct,
 } from '../../lib/ai';
 
@@ -43,7 +43,8 @@ const METRICS: {
 ];
 
 export function InvestigationAiPanel({ row }: { row: InvestigationCase }) {
-  const analysis = deriveAiAnalysis(row.aiScore, row.aiAnalysis);
+  // D6: 서버 aiAnalysis 우선, 없을 때만 deriveAi* fallback
+  const analysis = resolveAiAnalysis(row);
   const finalScore = clampScore(row.aiScore);
   const finalPct = toPct(finalScore);
 

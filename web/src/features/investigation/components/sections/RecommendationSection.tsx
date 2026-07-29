@@ -11,6 +11,7 @@ export function InvestigationRecommendationPanel({
 }: {
   row: InvestigationCase;
 }) {
+  // D6: 서버 aiRecommendation 우선 (deriveAiRecommendation 내부), 없을 때만 fallback
   const rec = deriveAiRecommendation(row);
 
   return (
