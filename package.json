@@ -16,6 +16,7 @@
     "lint:ci": "eslint . --max-warnings 8",
     "test": "jest",
     "test:migration": "powershell -ExecutionPolicy Bypass -File scripts/test-migration-empty-volume.ps1",
+    "test:migration:sh": "bash scripts/test-migration-empty-volume.sh",
     "typeorm": "typeorm-ts-node-commonjs",
     "migration:run": "npm run typeorm -- migration:run -d src/database/data-source.ts",
     "migration:run:prod": "node -r ./dist/register-paths.js ./node_modules/typeorm/cli.js migration:run -d dist/database/data-source.js",

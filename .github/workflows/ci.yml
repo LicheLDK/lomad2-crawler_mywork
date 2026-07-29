@@ -41,3 +41,15 @@ jobs:
 
       - name: Build frontend
         run: npm --prefix web run build
+
+  # 빈 볼륨에 마이그레이션을 적용하는 통합 검증.
+  # Docker Compose 를 띄우므로 build-test 와 분리해 기존 job 시간에 영향을 주지 않는다.
+  migration-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run migration empty-volume test
+        run: bash scripts/test-migration-empty-volume.sh

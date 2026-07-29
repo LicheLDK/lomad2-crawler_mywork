@@ -1,0 +1,7 @@
+* text=auto
+
+# 컨테이너/Ubuntu 러너에서 실행되므로 CRLF 로 체크아웃되면 안 된다
+*.sh text eol=lf
+
+# Windows 전용 스크립트
+*.ps1 text eol=crlf
