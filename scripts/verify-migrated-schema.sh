@@ -1,6 +1,6 @@
 set -e
 echo "Verifying migrated schema..."
-for t in typeorm_migrations search_history crawler_result search_history_results search_jobs investigation_cases; do
+for t in typeorm_migrations search_history crawler_result search_history_results search_jobs search_job_histories investigation_cases; do
   exists=$(psql -h postgres -U crawler -d search_crawler -Atc "SELECT to_regclass('public.${t}')")
   if [ -z "$exists" ]; then
     echo "MISSING TABLE: $t"

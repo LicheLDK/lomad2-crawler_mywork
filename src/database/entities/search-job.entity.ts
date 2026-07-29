@@ -12,6 +12,8 @@ export enum SearchJobStatus {
   QUEUED = 'queued',
   RUNNING = 'running',
   COMPLETED = 'completed',
+  /** 일부 키워드 성공 + 일부 실패/타임아웃 */
+  PARTIAL = 'partial',
   FAILED = 'failed',
 }
 
@@ -95,7 +97,11 @@ export class SearchJob {
   @Column({ type: 'boolean', default: true })
   useCache!: boolean;
 
-  /** 연결된 기존 search_history.id */
+  /**
+   * 대표(첫) 크롤 히스토리 ID.
+   * @deprecated Job:History는 `search_job_histories` 1:N을 사용한다.
+   * 컬럼은 유지하며 첫 크롤 히스토리로 계속 채운다. 제거는 TASK A-6에서 판단.
+   */
   @Index()
   @Column({ type: 'uuid', nullable: true })
   searchHistoryId!: string | null;

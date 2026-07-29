@@ -13,6 +13,7 @@ import {
   SearchHistory,
   SearchHistoryResult,
   SearchJob,
+  SearchJobHistory,
   SearchKeyword,
 } from './entities';
 
@@ -36,6 +37,7 @@ import {
           CrawlerResult,
           ImageHash,
           SearchJob,
+          SearchJobHistory,
           InvestigationCaseEntity,
           AiUsageLog,
           AiRule,
@@ -63,6 +65,7 @@ import {
       CrawlerResult,
       ImageHash,
       SearchJob,
+      SearchJobHistory,
       InvestigationCaseEntity,
       AiUsageLog,
       AiRule,

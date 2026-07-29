@@ -13,6 +13,7 @@ import {
   SearchHistory,
   SearchHistoryResult,
   SearchJob,
+  SearchJobHistory,
   SearchKeyword,
 } from './entities';
 
@@ -38,6 +39,7 @@ export const AppDataSource = new DataSource({
     CrawlerResult,
     ImageHash,
     SearchJob,
+    SearchJobHistory,
     InvestigationCaseEntity,
     AiUsageLog,
     AiRule,
