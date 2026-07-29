@@ -191,4 +191,76 @@ export const api = {
     request<import('./features/investigation/types').InvestigationConfigResponse>(
       '/investigations/config',
     ),
+  patchInvestigationStatus: (
+    id: string,
+    body: { status: import('./features/investigation/types').InvestigationStatus },
+  ) =>
+    request<import('./features/investigation/types').ServerInvestigationDto>(
+      `/investigations/${encodeURIComponent(id)}/status`,
+      { method: 'PATCH', body: JSON.stringify(body) },
+    ),
+  patchInvestigation: (
+    id: string,
+    body: {
+      assignee?: string | null;
+      priority?: import('./features/investigation/types').InvestigationPriority;
+      dueDate?: string | null;
+    },
+  ) =>
+    request<import('./features/investigation/types').ServerInvestigationDto>(
+      `/investigations/${encodeURIComponent(id)}`,
+      { method: 'PATCH', body: JSON.stringify(body) },
+    ),
+  addInvestigationNote: (
+    id: string,
+    body: { body: string; author?: string },
+  ) =>
+    request<import('./features/investigation/types').ServerInvestigationDto>(
+      `/investigations/${encodeURIComponent(id)}/notes`,
+      { method: 'POST', body: JSON.stringify(body) },
+    ),
+  updateInvestigationNote: (
+    id: string,
+    noteId: string,
+    body: { body: string },
+  ) =>
+    request<import('./features/investigation/types').ServerInvestigationDto>(
+      `/investigations/${encodeURIComponent(id)}/notes/${encodeURIComponent(noteId)}`,
+      { method: 'PATCH', body: JSON.stringify(body) },
+    ),
+  deleteInvestigationNote: (id: string, noteId: string) =>
+    request<import('./features/investigation/types').ServerInvestigationDto>(
+      `/investigations/${encodeURIComponent(id)}/notes/${encodeURIComponent(noteId)}`,
+      { method: 'DELETE' },
+    ),
+  applyInvestigationFinalDecision: (
+    id: string,
+    body: {
+      decision: import('./features/investigation/types').FinalDecision;
+      note?: string;
+    },
+  ) =>
+    request<import('./features/investigation/types').ServerInvestigationDto>(
+      `/investigations/${encodeURIComponent(id)}/final-decision`,
+      { method: 'POST', body: JSON.stringify(body) },
+    ),
 };
+
+/** NestJS 에러 JSON / 일반 Error 메시지를 UI용으로 정리 */
+export function formatApiError(e: unknown, fallback = '요청에 실패했습니다.'): string {
+  if (!(e instanceof Error)) return fallback;
+  const raw = e.message?.trim();
+  if (!raw) return fallback;
+  try {
+    const parsed = JSON.parse(raw) as { message?: string | string[] };
+    if (typeof parsed.message === 'string' && parsed.message.trim()) {
+      return parsed.message;
+    }
+    if (Array.isArray(parsed.message) && parsed.message.length > 0) {
+      return parsed.message.filter((m) => typeof m === 'string').join(', ') || fallback;
+    }
+  } catch {
+    /* plain text */
+  }
+  return raw;
+}

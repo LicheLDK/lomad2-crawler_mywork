@@ -1,13 +1,22 @@
 import type {
+  FinalDecision,
   InvestigationAiAnalysis,
   InvestigationAiRecommendation,
   InvestigationCase,
+  InvestigationNote,
   InvestigationPriority,
   InvestigationStatus,
   InvestigationTimelineEvent,
   ServerInvestigationDto,
 } from '../types';
 import { INVESTIGATION_STATUSES } from '../types';
+
+const FINAL_DECISIONS: FinalDecision[] = [
+  'resale_confirmed',
+  'further_investigation',
+  'false_positive',
+  'excluded',
+];
 
 const AI_ANALYSIS_KEYS: (keyof InvestigationAiAnalysis)[] = [
   'imageSimilarity',
@@ -176,6 +185,34 @@ function formatTimelineDetail(
   }
 }
 
+export function mapNotes(raw: unknown): InvestigationNote[] {
+  if (!Array.isArray(raw)) return [];
+  const notes = raw
+    .filter((n): n is Record<string, unknown> => !!n && typeof n === 'object')
+    .map((n, index) => {
+      const id =
+        typeof n.id === 'string' && n.id.trim() ? n.id : `note-${index}`;
+      const body = typeof n.body === 'string' ? n.body : '';
+      const author =
+        typeof n.author === 'string' && n.author.trim()
+          ? n.author
+          : '담당자';
+      const createdAt = toIso(n.createdAt);
+      const updatedAt = toIso(n.updatedAt, createdAt);
+      return { id, body, author, createdAt, updatedAt };
+    });
+  return notes.sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+  );
+}
+
+export function mapFinalDecision(raw: unknown): FinalDecision | null {
+  if (typeof raw !== 'string') return null;
+  return (FINAL_DECISIONS as string[]).includes(raw)
+    ? (raw as FinalDecision)
+    : null;
+}
+
 export function mapTimeline(
   raw: ServerInvestigationDto['timeline'] | InvestigationTimelineEvent[] | null | undefined,
 ): InvestigationTimelineEvent[] {
@@ -209,7 +246,8 @@ export function mapTimeline(
  * 목록·상세·Provider 모두 이 함수만 경유한다.
  *
  * D6: aiAnalysis / investigationSummary / aiRecommendation 은 서버 값 우선.
- * notes·finalDecision 등 미구현 필드는 빈 값으로 안전하게 둔다.
+ * D-5: notes / dueDate / finalDecision / decidedAt 은 서버 값 매핑 (부재 시 빈 값).
+ * Evidence는 서버 테이블 없음 — 빈 배열 유지 (편집 disabled).
  */
 export function mapServerCase(dto: ServerInvestigationDto): InvestigationCase {
   const aiScore = normalizeAiScore(dto.aiScore);
@@ -282,12 +320,11 @@ export function mapServerCase(dto: ServerInvestigationDto): InvestigationCase {
           ? fromTimeline.reasons
           : null,
     aiRecommendation,
-    // D-3 이전: 서버에 없는 워크플로 필드 — 빈 값으로 렌더 안전
-    noteEntries: [],
+    noteEntries: mapNotes(dto.notes ?? dto.noteEntries),
     notes: null,
-    dueDate: null,
+    dueDate: dto.dueDate != null ? toIso(dto.dueDate) : null,
     evidence: [],
-    finalDecision: null,
-    decidedAt: null,
+    finalDecision: mapFinalDecision(dto.finalDecision),
+    decidedAt: dto.decidedAt != null ? toIso(dto.decidedAt) : null,
   };
 }

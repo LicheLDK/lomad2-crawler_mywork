@@ -6,12 +6,10 @@ import {
   Image as ImageIcon,
   Link2,
   Monitor,
-  Trash2,
 } from 'lucide-react';
 import { resolveAssetUrl } from '../../../../api';
 import { formatTime } from '../../../../lib/format';
 import { EVIDENCE_KIND_LABEL } from '../../lib/evidence';
-import { deleteInvestigationEvidence } from '../../lib/store';
 import type {
   EvidenceKind,
   InvestigationCase,
@@ -91,18 +89,13 @@ function handleDownload(item: InvestigationEvidence, caseNo: string) {
 
 export function InvestigationEvidencePanel({
   row,
-  readOnly = false,
+  readOnly = true,
 }: {
   row: InvestigationCase;
+  /** D3: Evidence CRUD 미지원 — 기본 읽기 전용 */
   readOnly?: boolean;
 }) {
   const items = row.evidence ?? [];
-
-  function onDelete(item: InvestigationEvidence) {
-    if (readOnly) return;
-    deleteInvestigationEvidence(row.id, item.id);
-    toast('Evidence를 삭제했습니다.');
-  }
 
   return (
     <section className="space-y-3">
@@ -112,7 +105,7 @@ export function InvestigationEvidencePanel({
 
       {readOnly ? (
         <p className="text-xs text-ink-400">
-          쓰기 API 연결 전 — Evidence는 읽기 전용입니다.
+          Evidence 편집은 현재 지원하지 않습니다 (읽기 전용).
         </p>
       ) : null}
 
@@ -180,16 +173,7 @@ export function InvestigationEvidencePanel({
                         <Download className="h-3.5 w-3.5" />
                         다운로드
                       </button>
-                      {!readOnly ? (
-                        <button
-                          type="button"
-                          onClick={() => onDelete(item)}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-white px-2.5 py-1.5 text-xs font-medium text-rose-700 transition hover:bg-rose-50"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                          삭제
-                        </button>
-                      ) : null}
+                      {/* D3: 삭제 UI 숨김 — Evidence CRUD 후속 */}
                     </div>
                   </div>
                 </div>

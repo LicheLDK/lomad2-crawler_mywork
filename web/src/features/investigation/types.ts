@@ -148,7 +148,7 @@ export const INVESTIGATION_ASSIGNEES = [
   '최분석',
 ] as const;
 
-/** GET /api/investigations · /:id 서버 응답 (쓰기 필드 없음) */
+/** GET /api/investigations · /:id 및 쓰기 응답 DTO */
 export type ServerInvestigationDto = {
   id: string;
   caseNo: string;
@@ -202,5 +202,5 @@ export type InvestigationConfigResponse = {
   autoCreateEnabled: boolean;
 };
 
-/** D-1~D-4: 쓰기 API 연결 전 UI 안내 */
+/** D-6 수동 생성 등 아직 미연결 UI 안내 */
 export const WRITE_API_PENDING_HINT = '쓰기 API 연결 전';

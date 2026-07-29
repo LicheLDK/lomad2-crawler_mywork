@@ -1,11 +1,13 @@
 import { useState } from 'react';
-import { Ban, CheckCircle2, Lock, Search, ShieldAlert } from 'lucide-react';
+import { Ban, CheckCircle2, Search, ShieldAlert } from 'lucide-react';
 import type { FinalDecision, InvestigationCase } from '../../types';
-import { WRITE_API_PENDING_HINT } from '../../types';
 import { isInvestigationLocked } from '../../lib/workflow';
+import { useInvestigation } from '../../useInvestigation';
+import { formatApiError } from '../../../../api';
 import { formatTime } from '../../../../lib/format';
 import { Badge } from '../../../../components/ui/badge';
 import { ConfirmDialog } from '../../../../components/ui/confirm-dialog';
+import { toast } from '../../../../components/Toast';
 
 export const FINAL_DECISION_OPTIONS: {
   value: FinalDecision;
@@ -16,29 +18,29 @@ export const FINAL_DECISION_OPTIONS: {
 }[] = [
   {
     value: 'resale_confirmed',
-    label: '재판매 확인',
-    description: '무단 재판매로 판정합니다.',
+    label: '??? ??',
+    description: '?? ???? ?????.',
     Icon: ShieldAlert,
     tone: 'rose',
   },
   {
     value: 'further_investigation',
-    label: '추가 조사',
-    description: '추가 조사가 필요하나 Case는 완료 처리합니다.',
+    label: '?? ??',
+    description: '?? ??? ???? Case? ?? ?????.',
     Icon: Search,
     tone: 'amber',
   },
   {
     value: 'false_positive',
-    label: '오탐',
-    description: 'AI/검색 결과가 오탐으로 판정합니다.',
+    label: '??',
+    description: 'AI/?? ??? ???? ?????.',
     Icon: Ban,
     tone: 'ink',
   },
   {
     value: 'excluded',
-    label: '제외',
-    description: '조사 대상에서 제외합니다.',
+    label: '??',
+    description: '?? ???? ?????.',
     Icon: CheckCircle2,
     tone: 'teal',
   },
@@ -46,7 +48,7 @@ export const FINAL_DECISION_OPTIONS: {
 
 export function finalDecisionLabel(value: FinalDecision | null | undefined) {
   return (
-    FINAL_DECISION_OPTIONS.find((o) => o.value === value)?.label ?? value ?? '—'
+    FINAL_DECISION_OPTIONS.find((o) => o.value === value)?.label ?? value ?? '�'
   );
 }
 
@@ -62,10 +64,25 @@ export function InvestigationFinalDecisionPanel({
 }: {
   row: InvestigationCase;
 }) {
+  const { applyFinalDecision } = useInvestigation();
   const locked = isInvestigationLocked(row.status);
-  const writesDisabled = true; // D-1: write API pending
   const [pending, setPending] = useState<FinalDecision | null>(null);
+  const [busy, setBusy] = useState(false);
   const pendingOption = FINAL_DECISION_OPTIONS.find((o) => o.value === pending);
+
+  async function confirmDecision() {
+    if (!pending || busy) return;
+    setBusy(true);
+    try {
+      await applyFinalDecision(row.id, pending);
+      toast(`?? ??? ?????? � ${finalDecisionLabel(pending)}`);
+      setPending(null);
+    } catch (e) {
+      toast(formatApiError(e, '?? ?? ??? ??????.'));
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
     <section className="space-y-3">
@@ -85,7 +102,7 @@ export function InvestigationFinalDecisionPanel({
               {finalDecisionLabel(row.finalDecision)}
             </p>
             <p className="text-xs text-ink-500">
-              판정일 · {formatTime(row.decidedAt)}
+              ??? � {formatTime(row.decidedAt)}
             </p>
           </div>
         ) : (
@@ -96,9 +113,9 @@ export function InvestigationFinalDecisionPanel({
                 <button
                   key={opt.value}
                   type="button"
-                  disabled={writesDisabled || locked}
+                  disabled={locked || busy}
                   onClick={() => {
-                    if (!writesDisabled && !locked) setPending(opt.value);
+                    if (!locked) setPending(opt.value);
                   }}
                   className={`inline-flex items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50 ${BTN[opt.tone]}`}
                 >
@@ -110,22 +127,23 @@ export function InvestigationFinalDecisionPanel({
           </div>
         )}
 
-        <p className="mt-3 inline-flex items-center gap-1.5 text-xs text-ink-500">
-          <Lock className="h-3.5 w-3.5" />
-          {WRITE_API_PENDING_HINT} — 최종 판정은 저장되지 않습니다
-        </p>
+        {locked && !row.finalDecision ? (
+          <p className="mt-3 text-xs text-ink-500">
+            Completed / Archived ???? ?? ??? ??? ? ????.
+          </p>
+        ) : null}
       </div>
 
       <ConfirmDialog
         open={pending != null}
-        title="최종 판정 확인"
+        title="?? ?? ??"
         description={
           pendingOption
-            ? `'${pendingOption.label}' — ${WRITE_API_PENDING_HINT}`
+            ? `'${pendingOption.label}' � ${pendingOption.description} Case? Completed? ?????.`
             : undefined
         }
-        confirmLabel="확인"
-        cancelLabel="취소"
+        confirmLabel={busy ? '?? ?�' : '??'}
+        cancelLabel="??"
         tone={
           pending === 'resale_confirmed'
             ? 'danger'
@@ -133,8 +151,12 @@ export function InvestigationFinalDecisionPanel({
               ? 'teal'
               : 'default'
         }
-        onCancel={() => setPending(null)}
-        onConfirm={() => setPending(null)}
+        onCancel={() => {
+          if (!busy) setPending(null);
+        }}
+        onConfirm={() => {
+          void confirmDecision();
+        }}
       />
     </section>
   );

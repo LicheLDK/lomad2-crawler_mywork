@@ -140,6 +140,39 @@ describe('mapServerCase (D-2 adapter)', () => {
     expect(mapped.createdAt).toBe('2026-07-29T04:00:00.000Z');
   });
 
+  it('maps notes, dueDate, finalDecision from server (D-5)', () => {
+    const mapped = mapServerCase(
+      baseDto({
+        notes: [
+          {
+            id: 'n1',
+            body: '첫 메모',
+            author: '김수사',
+            createdAt: '2026-07-29T05:00:00.000Z',
+            updatedAt: '2026-07-29T05:00:00.000Z',
+          },
+          {
+            id: 'n2',
+            body: '나중 메모',
+            author: '이담당',
+            createdAt: '2026-07-29T06:00:00.000Z',
+            updatedAt: '2026-07-29T06:30:00.000Z',
+          },
+        ],
+        dueDate: '2026-08-01T00:00:00.000Z',
+        finalDecision: 'resale_confirmed',
+        decidedAt: '2026-07-29T07:00:00.000Z',
+      }),
+    );
+
+    expect(mapped.noteEntries?.map((n) => n.id)).toEqual(['n2', 'n1']);
+    expect(mapped.noteEntries?.[0]?.body).toBe('나중 메모');
+    expect(mapped.dueDate).toBe('2026-08-01T00:00:00.000Z');
+    expect(mapped.finalDecision).toBe('resale_confirmed');
+    expect(mapped.decidedAt).toBe('2026-07-29T07:00:00.000Z');
+    expect(mapped.evidence).toEqual([]);
+  });
+
   it('keeps server timeline kinds for Drawer display', () => {
     const mapped = mapServerCase(
       baseDto({

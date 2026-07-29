@@ -1,11 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
+import { formatApiError } from '../../../../api';
 import { formatTime } from '../../../../lib/format';
-import {
-  addInvestigationNote,
-  deleteInvestigationNote,
-  updateInvestigationNote,
-} from '../../lib/store';
+import { useInvestigation } from '../../useInvestigation';
 import type {
   InvestigationCase,
   InvestigationNote,
@@ -14,6 +11,7 @@ import { Badge } from '../../../../components/ui/badge';
 import { toast } from '../../../../components/Toast';
 
 const AUTOSAVE_MS = 600;
+const LOCAL_DRAFT_ID = '__local_draft__';
 
 function defaultAuthor(row: InvestigationCase) {
   return row.assignee?.trim() || '조사관';
@@ -30,12 +28,12 @@ function NoteEditor({
   noteId: string;
   initial: string;
   authorHint: string;
-  onSave: (body: string) => void;
+  onSave: (body: string) => void | Promise<void>;
   onCancel?: () => void;
   autoFocus?: boolean;
 }) {
   const [body, setBody] = useState(initial);
-  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>(
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>(
     'idle',
   );
   const lastSaved = useRef(initial);
@@ -54,9 +52,15 @@ function NoteEditor({
     setSaveState('saving');
     if (timer.current) window.clearTimeout(timer.current);
     timer.current = window.setTimeout(() => {
-      onSaveRef.current(body);
-      lastSaved.current = body;
-      setSaveState('saved');
+      void (async () => {
+        try {
+          await onSaveRef.current(body);
+          lastSaved.current = body;
+          setSaveState('saved');
+        } catch {
+          setSaveState('error');
+        }
+      })();
     }, AUTOSAVE_MS);
     return () => {
       if (timer.current) window.clearTimeout(timer.current);
@@ -81,7 +85,9 @@ function NoteEditor({
             ? ' · 저장 중…'
             : saveState === 'saved'
               ? ' · 자동 저장됨'
-              : ''}
+              : saveState === 'error'
+                ? ' · 저장 실패'
+                : ''}
         </p>
         {onCancel ? (
           <button
@@ -101,24 +107,36 @@ function NoteCard({
   note,
   caseId,
   authorHint,
-  readOnly = false,
 }: {
   note: InvestigationNote;
   caseId: string;
   authorHint: string;
-  readOnly?: boolean;
 }) {
+  const { updateNote, deleteNote } = useInvestigation();
   const [editing, setEditing] = useState(false);
 
-  function handleSave(body: string) {
-    if (readOnly) return;
-    updateInvestigationNote(caseId, note.id, body);
+  async function handleSave(body: string) {
+    const trimmed = body.trim();
+    if (!trimmed) {
+      toast('메모 내용은 비울 수 없습니다.');
+      throw new Error('empty note');
+    }
+    if (trimmed === note.body.trim()) return;
+    try {
+      await updateNote(caseId, note.id, trimmed);
+    } catch (e) {
+      toast(formatApiError(e, '메모 수정에 실패했습니다.'));
+      throw e;
+    }
   }
 
-  function handleDelete() {
-    if (readOnly) return;
-    deleteInvestigationNote(caseId, note.id);
-    toast('메모를 삭제했습니다.');
+  async function handleDelete() {
+    try {
+      await deleteNote(caseId, note.id);
+      toast('메모를 삭제했습니다.');
+    } catch (e) {
+      toast(formatApiError(e, '메모 삭제에 실패했습니다.'));
+    }
   }
 
   return (
@@ -133,29 +151,29 @@ function NoteCard({
               : ''}
           </p>
         </div>
-        {!readOnly ? (
-          <div className="flex shrink-0 gap-1">
-            <button
-              type="button"
-              onClick={() => setEditing((v) => !v)}
-              className="rounded-lg p-1.5 text-ink-500 transition hover:bg-sand-100 hover:text-ink-800"
-              aria-label="메모 수정"
-            >
-              <Pencil className="h-3.5 w-3.5" />
-            </button>
-            <button
-              type="button"
-              onClick={handleDelete}
-              className="rounded-lg p-1.5 text-rose-600 transition hover:bg-rose-50"
-              aria-label="메모 삭제"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </button>
-          </div>
-        ) : null}
+        <div className="flex shrink-0 gap-1">
+          <button
+            type="button"
+            onClick={() => setEditing((v) => !v)}
+            className="rounded-lg p-1.5 text-ink-500 transition hover:bg-sand-100 hover:text-ink-800"
+            aria-label="메모 수정"
+          >
+            <Pencil className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              void handleDelete();
+            }}
+            className="rounded-lg p-1.5 text-rose-600 transition hover:bg-rose-50"
+            aria-label="메모 삭제"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        </div>
       </div>
 
-      {editing && !readOnly ? (
+      {editing ? (
         <NoteEditor
           noteId={note.id}
           initial={note.body}
@@ -179,30 +197,30 @@ function NoteCard({
 
 export function InvestigationNotesPanel({
   row,
-  readOnly = false,
 }: {
   row: InvestigationCase;
-  readOnly?: boolean;
 }) {
+  const { addNote } = useInvestigation();
   const notes = row.noteEntries ?? [];
   const author = defaultAuthor(row);
-  const [draftId, setDraftId] = useState<string | null>(null);
+  const [composing, setComposing] = useState(false);
 
   useEffect(() => {
-    setDraftId(null);
+    setComposing(false);
   }, [row.id]);
 
-  function startCompose() {
-    if (readOnly) return;
-    const created = addInvestigationNote(row.id, '', author);
-    if (!created) return;
-    const newest = created.noteEntries?.[0];
-    setDraftId(newest?.id ?? null);
+  async function handleCreate(body: string) {
+    const trimmed = body.trim();
+    if (!trimmed) return;
+    try {
+      await addNote(row.id, trimmed, author);
+      setComposing(false);
+      toast('메모를 저장했습니다.');
+    } catch (e) {
+      toast(formatApiError(e, '메모 추가에 실패했습니다.'));
+      throw e;
+    }
   }
-
-  const draftNote = draftId
-    ? notes.find((n) => n.id === draftId)
-    : undefined;
 
   return (
     <section className="space-y-3">
@@ -212,10 +230,10 @@ export function InvestigationNotesPanel({
         </h3>
         <div className="flex items-center gap-2">
           <Badge variant="secondary">{notes.length}</Badge>
-          {!readOnly ? (
+          {!composing ? (
             <button
               type="button"
-              onClick={startCompose}
+              onClick={() => setComposing(true)}
               className="inline-flex items-center gap-1 rounded-lg border border-ink-200 bg-white px-2 py-1 text-xs font-medium text-ink-700 transition hover:bg-sand-50"
             >
               <Plus className="h-3.5 w-3.5" />
@@ -225,52 +243,36 @@ export function InvestigationNotesPanel({
         </div>
       </div>
 
-      {readOnly ? (
-        <p className="text-xs text-ink-400">
-          쓰기 API 연결 전 — 메모는 읽기 전용입니다.
-        </p>
-      ) : null}
-
-      {draftNote && !readOnly ? (
+      {composing ? (
         <div className="rounded-xl border border-teal-200/80 bg-teal-50/40 p-3">
           <p className="mb-2 text-[11px] font-medium uppercase tracking-[0.12em] text-teal-800">
             새 메모 · Plain text · 자동 저장
           </p>
           <NoteEditor
-            noteId={draftNote.id}
-            initial={draftNote.body}
+            noteId={LOCAL_DRAFT_ID}
+            initial=""
             authorHint={author}
             autoFocus
-            onSave={(body) =>
-              updateInvestigationNote(row.id, draftNote.id, body)
-            }
-            onCancel={() => {
-              if (!draftNote.body.trim()) {
-                deleteInvestigationNote(row.id, draftNote.id);
-              }
-              setDraftId(null);
-            }}
+            onSave={handleCreate}
+            onCancel={() => setComposing(false)}
           />
         </div>
       ) : null}
 
       <ul className="space-y-2">
-        {notes.filter((n) => n.id !== draftId).length === 0 && !draftNote ? (
+        {notes.length === 0 && !composing ? (
           <li className="rounded-xl border border-dashed border-ink-200 bg-white px-4 py-6 text-center text-sm text-ink-400">
             작성된 메모가 없습니다.
           </li>
         ) : (
-          notes
-            .filter((n) => n.id !== draftId)
-            .map((note) => (
-              <NoteCard
-                key={note.id}
-                note={note}
-                caseId={row.id}
-                authorHint={author}
-                readOnly={readOnly}
-              />
-            ))
+          notes.map((note) => (
+            <NoteCard
+              key={note.id}
+              note={note}
+              caseId={row.id}
+              authorHint={author}
+            />
+          ))
         )}
       </ul>
     </section>

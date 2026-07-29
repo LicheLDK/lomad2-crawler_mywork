@@ -326,7 +326,7 @@ export function CaseDrawer({
             }}
             className="scroll-mt-2 space-y-5"
           >
-            <InvestigationNotesPanel row={row} readOnly />
+            <InvestigationNotesPanel row={row} />
             <InvestigationFinalDecisionPanel row={row} />
           </section>
         </div>

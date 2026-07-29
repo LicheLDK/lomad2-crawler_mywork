@@ -1,4 +1,4 @@
-import { Lock } from 'lucide-react';
+import { useState } from 'react';
 import type {
   InvestigationCase,
   InvestigationPriority,
@@ -6,11 +6,13 @@ import type {
 import {
   INVESTIGATION_ASSIGNEES,
   INVESTIGATION_PRIORITIES,
-  WRITE_API_PENDING_HINT,
 } from '../../types';
+import { useInvestigation } from '../../useInvestigation';
+import { formatApiError } from '../../../../api';
 import { formatDateShort } from '../../../../lib/format';
 import { Badge } from '../../../../components/ui/badge';
 import { cn } from '../../../../lib/utils';
+import { toast } from '../../../../components/Toast';
 
 function priorityVariant(
   p: InvestigationPriority,
@@ -32,12 +34,17 @@ function toDateInputValue(value?: string | null) {
   return `${y}-${m}-${day}`;
 }
 
+function dateInputToIso(value: string): string {
+  return `${value}T00:00:00.000Z`;
+}
+
 export function InvestigationAssignmentPanel({
   row,
 }: {
   row: InvestigationCase;
 }) {
-  const writesDisabled = true; // D-1: 쓰기 API 연결 전
+  const { updateAssignment } = useInvestigation();
+  const [busy, setBusy] = useState(false);
   const priority = ((row.priority as string) === 'Critical'
     ? 'High'
     : (row.priority ?? 'Medium')) as InvestigationPriority;
@@ -48,6 +55,26 @@ export function InvestigationAssignmentPanel({
       ...(row.assignee ? [row.assignee] : []),
     ]),
   );
+
+  async function save(
+    patch: {
+      assignee?: string | null;
+      priority?: InvestigationPriority;
+      dueDate?: string | null;
+    },
+    okMessage: string,
+  ) {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await updateAssignment(row.id, patch);
+      toast(okMessage);
+    } catch (e) {
+      toast(formatApiError(e, '담당 정보 저장에 실패했습니다.'));
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
     <section className="space-y-3">
@@ -71,9 +98,11 @@ export function InvestigationAssignmentPanel({
           <select
             id={`assignee-${row.id}`}
             value={row.assignee ?? ''}
-            disabled={writesDisabled}
-            onChange={() => {
-              /* D-1: no-op */
+            disabled={busy}
+            onChange={(e) => {
+              const next = e.target.value.trim() || null;
+              if (next === (row.assignee ?? null)) return;
+              void save({ assignee: next }, '담당자를 저장했습니다.');
             }}
             className="mt-1 w-full rounded-xl border border-ink-200 bg-white px-3 py-2.5 text-sm text-ink-800 outline-none transition focus:border-teal-600 focus:ring-2 focus:ring-teal-600/20 disabled:cursor-not-allowed disabled:bg-sand-50"
           >
@@ -95,9 +124,9 @@ export function InvestigationAssignmentPanel({
                 <button
                   key={p}
                   type="button"
-                  disabled={writesDisabled}
+                  disabled={busy || active}
                   onClick={() => {
-                    /* D-1: no-op */
+                    void save({ priority: p }, `우선순위를 ${p}(으)로 저장했습니다.`);
                   }}
                   className={cn(
                     'rounded-full transition disabled:cursor-not-allowed disabled:opacity-60',
@@ -127,9 +156,16 @@ export function InvestigationAssignmentPanel({
             id={`due-${row.id}`}
             type="date"
             value={toDateInputValue(row.dueDate)}
-            disabled={writesDisabled}
-            onChange={() => {
-              /* D-1: no-op */
+            disabled={busy}
+            onChange={(e) => {
+              const raw = e.target.value;
+              const next = raw ? dateInputToIso(raw) : null;
+              const prev = toDateInputValue(row.dueDate);
+              if (raw === prev) return;
+              void save(
+                { dueDate: next },
+                next ? '마감일을 저장했습니다.' : '마감일을 해제했습니다.',
+              );
             }}
             className="mt-1 w-full rounded-xl border border-ink-200 bg-white px-3 py-2.5 text-sm text-ink-800 outline-none transition focus:border-teal-600 focus:ring-2 focus:ring-teal-600/20 disabled:cursor-not-allowed disabled:bg-sand-50"
           />
@@ -140,10 +176,9 @@ export function InvestigationAssignmentPanel({
           ) : null}
         </div>
 
-        <p className="inline-flex items-center gap-1.5 text-xs text-ink-500">
-          <Lock className="h-3.5 w-3.5" />
-          {WRITE_API_PENDING_HINT} — 담당 지정은 저장되지 않습니다
-        </p>
+        {busy ? (
+          <p className="text-xs text-ink-400">저장 중…</p>
+        ) : null}
       </div>
     </section>
   );
