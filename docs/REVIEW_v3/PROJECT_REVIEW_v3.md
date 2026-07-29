@@ -47,7 +47,7 @@ v2의 모든 항목이 v3에서 어디로 이어지는지 명시한다.
 | v2 §4.4    | 운영 secret 검증             | 해소 유지 (범위 한계 신규 지적)     | §5.4, §7.2 N7 |
 | v2 §4.5    | 회귀 테스트                  | 해소 유지 (커버리지 범위 신규 지적) | §5.5, §7.2 N5 |
 | —          | UI 메뉴 IA 리팩토링          | **신규 반영**                       | §5.6          |
-| v2 §5 P1-1 | 다중 키워드 집계 취약        | **미해소, 유효**                    | §7.1 P1-A     |
+| v2 §5 P1-1 | 다중 키워드 집계 취약        | **해소** (TASK A-1~A-6, 2026-07-29) | §7.1 P1-A     |
 | v2 §5 P1-2 | AI provider 구현 상태 제한적 | **미해소, 근거 보강**               | §7.1 P1-B     |
 | v2 §5 P1-3 | 운영 관측성 최소 수준        | **미해소, 유효**                    | §7.1 P1-C     |
 | v2 §5 P1-4 | 크롤링 정책 미고정           | **미해소, 유효**                    | §7.1 P1-D     |
@@ -260,24 +260,53 @@ System
 
 ### 7.1 v2에서 계속 유효한 문제
 
-#### P1-A. Search Job의 다중 키워드 처리 집계가 약하다 (v2 §5 P1-1)
+#### P1-A. Search Job의 다중 키워드 처리 집계가 약하다 (v2 §5 P1-1) — **해소**
 
-`SearchJobService.runSearch()`는 여러 키워드를 순차 실행하지만, crawl이 필요한 경우 **첫 번째** pending history만 감시한다(`src/modules/search-job/search-job.service.ts:280-284`). 조사 케이스 트리거도 그 하나의 `searchHistoryId`만 대상으로 한다(`:382`).
+> **해소일**: 2026-07-29 · **작업**: `docs/REVIEW_v3/작업지시서_v3_A.md` TASK A-1 ~ A-6  
+> **핵심 커밋**: `search_job_histories` 스키마 → dual-write → 판정·집계 전환 → API/UI 노출 → 정리
 
-영향:
+##### 해소 전 문제 (기록)
 
-- Search Job 상세에서 일부 키워드 결과가 누락되어 보일 수 있음
-- BackOffice callback의 investigation count와 실제 생성 case 수가 어긋날 수 있음
-- 다중 키워드 검색의 성공/실패 판단이 불명확
+`SearchJobService.runSearch()`가 키워드 N개를 실행해도 crawl 감시·완료 판정·`resultCount`·조사 생성이 **첫 번째** `searchHistoryId`에만 묶였다. 나머지 키워드 크롤이 진행 중인데 Job이 완료되고, callback·조사가 부분 숫자만 반영되었다.
 
-부수적으로, `runSearch()`의 `result.status === 'failed'` 분기(`:259-264`)는 `SearchService.search()`가 동기적으로 failed를 반환하지 않으므로 도달 불가한 죽은 코드다.
+##### 해소 내용
 
-권장 보완 (v2와 동일):
+| TASK | 내용 |
+| ---- | ---- |
+| A-1 | 빈 볼륨 마이그레이션 테스트 sh 래퍼 + CI job |
+| A-2 | `search_job_histories` 테이블·엔티티, `SearchJobStatus.PARTIAL`, 기존 Job backfill |
+| A-3 | `runSearch()` dual-write (완료 판정은 기존 유지) |
+| A-4 | 전체 히스토리 감시, 이중 타임아웃, partial 판정, distinct `resultCount`, 전 히스토리 조사 |
+| A-5 | API·callback·Rental UI에 `keywordHistories` 노출 (기존 필드 유지) |
+| A-6 | deprecated 미사용 메서드 정리, `search_jobs.searchHistoryId` 참조 전수 조사, 본 기록 |
 
-1. `SearchJob`과 `SearchHistory`를 1:N으로 연결하는 별도 테이블을 둔다.
-2. 각 keyword별 `searchHistoryId`, status, resultCount를 저장한다.
-3. Search Job 완료 판단은 모든 search history가 terminal 상태가 되었을 때 수행한다.
-4. Investigation 생성도 대표 history가 아니라 Job 전체 결과를 대상으로 수행한다.
+##### 확정 정책 (A1~A5)
+
+| ID | 정책 | 확정 내용 |
+| -- | ---- | --------- |
+| **A1** | 중복 매물 카운트 | Job `resultCount` = 소속 히스토리의 **고유 `resultId` 수**. 키워드별 합계 ≠ Job 합계가 정상. |
+| **A2** | `search_jobs.searchHistoryId` | **컬럼 유지 + `@deprecated`**. 첫 크롤 히스토리를 대표로 계속 채움. |
+| **A3** | 타임아웃 | 키워드별 상한(`SEARCH_JOB_KEYWORD_TIMEOUT_MS`) + Job 전체 상한(`SEARCH_JOB_TOTAL_TIMEOUT_MS`, 기본 10분). |
+| **A4** | 부분 실패 | 전부 성공 → `completed` / 일부 실패·타임아웃 → `partial` / 전부 실패 → `failed`. |
+| **A5** | 기존 데이터 | 마이그레이션 `up()`에서 `searchHistoryId` NOT NULL Job을 `search_job_histories`에 1행씩 backfill. |
+
+##### A-6 `search_jobs.searchHistoryId` 참조 전수 조사 (2026-07-29)
+
+**결론: 참조가 다수이므로 컬럼 제거 금지. 제거 여부는 담당자 확인 후 별도 판단.**
+
+| 구분 | 읽는 곳 | 용도 |
+| ---- | ------- | ---- |
+| 백엔드 쓰기 | `search-job.service.ts` `runSearch()` | 첫 히스토리를 대표로 채움 (A2) |
+| 백엔드 읽기 | `listRecentJobs`, `toDetailResponse`, `publishFromJob`/`getProgress` | API·WS 응답의 대표 `searchHistoryId` |
+| 백엔드 읽기 | `getRentalJobDetail` → `searchHistories` | 레거시 단일 항목 배열 (호환) |
+| 백엔드 fallback | `finalizeJob`, `triggerAutoInvestigation`, progress sync | `search_job_histories` 없을 때 레거시 Job 처리 |
+| 백엔드 삭제 | `search.service.ts` `deleteSearch()` | 해당 history 삭제 시 Job 컬럼만 null |
+| 프론트 | `web/src/api.ts`, `RentalPage.tsx`, `socket.ts`, `types.ts` | Job/progress 타입·목록 필드 (표시는 `keywordHistories` 중심) |
+| 문서 | `docs/백오피스_연동_가이드.md` (Progress·폴링 예시), 리뷰/지시서 | 외부 연동 예시가 대표 ID를 읽음 |
+| 스키마 | Baseline + `SearchJobHistories` 마이그레이션 | 컬럼·인덱스·backfill 소스 |
+
+정리한 미사용 deprecated: `SearchJobService.listRecentRentalOrders()`, `web` `api.listRentalOrders`.  
+부수: A-4/A-5에서 늘어난 spec `any` 경고로 `lint:ci`(max-warnings 8)가 깨져 있던 상태를 A-6에서 복구 — `*.spec.ts`에 `no-explicit-any` off, 미사용 `eslint-disable` 제거.
 
 #### P1-B. AI provider 구현 상태가 문서보다 제한적이다 (v2 §5 P1-2)
 
@@ -695,7 +724,7 @@ UI 개선으로 기능 대부분이 하위 메뉴로 이동했기 때문에, 이
 **이전부터 죽어 있던 것** (v2 미기재):
 
 - 재수출 shim 9개: `web/src/lib/investigation-{ai,evidence,store,workflow}.ts`, `web/src/types/investigation.ts`, `web/src/data/investigation-mock.ts`, `web/src/components/InvestigationDrawer.tsx`, `web/src/components/InvestigationSummaryCard.tsx`, `web/src/pages/InvestigationPage.tsx` — 전부 `@deprecated` 주석이 달려 있고 **import하는 곳이 하나도 없다.** 즉시 삭제 가능
-- `api.ts` 미사용 함수: `crawl`, `createSearchJob`, `getSearchJob`, `getSearchJobProgress`, `results`, `listRentalOrders`
+- `api.ts` 미사용 함수: `crawl`, `createSearchJob`, `getSearchJob`, `getSearchJobProgress`, `results` (`listRentalOrders`는 TASK A-6에서 삭제)
 - `socket.ts`의 `pollSearchJobProgress()` — 호출부 없음
 - `web/package.json`의 `search-crawler-server: file:..` 의존성 — 소스에서 import 0건
 - 커밋된 빌드 산출물: `web/vite.config.js`, `web/vite.config.d.ts`. `tsconfig.node.json`에 `noEmit`이 없어 생긴 부산물이며 `.gitignore`에도 없다
@@ -739,14 +768,14 @@ v2의 A~E를 유지하되, v3 신규 발견 중 즉시 처리 항목을 **우선
 | 0-7 | `PlaceholderPage`를 준비중 라우트에 재연결                   | U8     | `App.tsx`                                                    |
 | 0-8 | 프론트 데드 코드 shim 9개 삭제, 커밋된 빌드 산출물 정리      | U10    | 삭제 위주                                                    |
 
-### 우선순위 A: 운영 정확성 (v2 §6 A + N1·N2 반영)
+### 우선순위 A: 운영 정확성 (v2 §6 A + N1·N2 반영) — P1-A **해소** (TASK A-1~A-6)
 
-1. Search Job과 Search History의 1:N 관계 명시 (P1-A)
-2. 다중 키워드 crawl 완료 감시 로직 개선 (P1-A)
-3. Job 단위 result/investigation 집계 정확도 보강 (P1-A)
-4. BackOffice callback payload에 keyword별 요약 또는 대표 결과 기준 명시 (P1-A)
-5. Investigation 생성 경로 단일화 후 회귀 테스트 고정 (N1)
-6. 매칭 입력 필드가 실제로 채워지는지 테스트로 고정 (N2, N5)
+1. ~~Search Job과 Search History의 1:N 관계 명시 (P1-A)~~ ✅
+2. ~~다중 키워드 crawl 완료 감시 로직 개선 (P1-A)~~ ✅
+3. ~~Job 단위 result/investigation 집계 정확도 보강 (P1-A)~~ ✅
+4. ~~BackOffice callback payload에 keyword별 요약 또는 대표 결과 기준 명시 (P1-A)~~ ✅
+5. Investigation 생성 경로 단일화 후 회귀 테스트 고정 (N1) — 우선순위 0에서 처리
+6. 매칭 입력 필드가 실제로 채워지는지 테스트로 고정 (N2, N5) — 우선순위 0에서 처리
 
 ### 우선순위 B: 운영 관측성 (v2 §6 B 유지)
 
@@ -961,6 +990,6 @@ v3에서 새로 확인한 가장 중요한 사실은 **AI 판단 엔진이 구�
 
 1. **AI 판단 정확도 복구** (N1, N2) — 작업량 최소, 효과 즉각
 2. **개발 기반 복구** (N3) — 이후 모든 작업의 안전망
-3. **Search Job 1:N 구조 정리** (P1-A) — v2 최우선, 마이그레이션 필요
+3. ~~**Search Job 1:N 구조 정리** (P1-A)~~ ✅ 해소 (2026-07-29, TASK A-1~A-6)
 4. **Investigation 실 API 전환** (U9) — 업무 시스템으로서의 완성
 5. **운영 관측성·AI provider 명확화** (P1-B, P1-C) — 화면 골격이 준비되어 있어 비용이 낮아진 상태

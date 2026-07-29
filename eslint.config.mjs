@@ -47,4 +47,11 @@ export default [
       '@typescript-eslint/no-require-imports': 'off',
     },
   },
+  {
+    files: ['src/**/*.spec.ts'],
+    rules: {
+      // 단위 테스트 mock 캐스팅 — 구현 코드에는 동일 완화 적용하지 않음
+      '@typescript-eslint/no-explicit-any': 'off',
+    },
+  },
 ];

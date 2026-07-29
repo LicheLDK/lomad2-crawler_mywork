@@ -6,7 +6,7 @@ export async function computeAverageHash(
   buffer: Buffer,
   size = 8,
 ): Promise<string> {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
+   
   const sharp = require('sharp') as typeof import('sharp');
 
   const raw = await sharp(buffer)

@@ -319,7 +319,7 @@ async function bootstrap() {
     jsonDocumentUrl: 'docs-json',
   });
 
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
+   
   const swaggerAssetsPath = require('swagger-ui-dist/absolute-path.js')() as string;
   app.useStaticAssets(swaggerAssetsPath, {
     prefix: '/swagger-assets/',
@@ -341,7 +341,7 @@ async function bootstrap() {
 
   const port = process.env.PORT || 3100;
   await app.listen(port, '0.0.0.0');
-  // eslint-disable-next-line no-console
+   
   console.log(`Search Crawler API listening on :${port}`);
   console.log(`API docs: http://127.0.0.1:${port}/docs`);
   console.log(`Swagger UI: http://127.0.0.1:${port}/docs/swagger`);

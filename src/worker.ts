@@ -18,7 +18,7 @@ async function bootstrap() {
   });
   app.useLogger(app.get(Logger));
 
-  // eslint-disable-next-line no-console
+   
   console.log('Crawl worker started (BullMQ processor active)');
 }
 

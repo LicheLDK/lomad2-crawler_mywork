@@ -118,11 +118,6 @@ export const api = {
         investigationCount: number;
       }>;
     }>(`/search-jobs/rental/recent?limit=${limit}`),
-  /** @deprecated use listRentalJobs */
-  listRentalOrders: (limit = 40) =>
-    request<{ total: number; items: unknown[] }>(
-      `/search-jobs/rental/recent?limit=${limit}`,
-    ),
   getRentalJob: (jobId: string) =>
     request<{
       job: {

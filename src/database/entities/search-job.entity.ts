@@ -100,7 +100,9 @@ export class SearchJob {
   /**
    * 대표(첫) 크롤 히스토리 ID.
    * @deprecated Job:History는 `search_job_histories` 1:N을 사용한다.
-   * 컬럼은 유지하며 첫 크롤 히스토리로 계속 채운다. 제거는 TASK A-6에서 판단.
+   * 컬럼은 유지하며 첫 크롤 히스토리로 계속 채운다 (정책 A2).
+   * TASK A-6 전수 조사: API·프론트·레거시 fallback·삭제 경로·문서가 여전히 읽는다.
+   * 컬럼 제거는 별도 판단(담당자 확인) 전까지 금지.
    */
   @Index()
   @Column({ type: 'uuid', nullable: true })

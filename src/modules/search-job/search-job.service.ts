@@ -225,11 +225,6 @@ export class SearchJobService {
     };
   }
 
-  /** @deprecated use listRecentJobs — 호환 별칭 */
-  async listRecentRentalOrders(limit = 40) {
-    return this.listRecentJobs(limit);
-  }
-
   private async runSearch(jobId: string): Promise<void> {
     const job = await this.jobRepo.findOne({ where: { id: jobId } });
     if (!job) return;

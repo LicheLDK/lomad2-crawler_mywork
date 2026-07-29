@@ -145,7 +145,7 @@ export class ImageStorageService {
   }
 
   private async assertDecodableImage(buffer: Buffer): Promise<void> {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+     
     const sharp = require('sharp') as typeof import('sharp');
     const meta = await sharp(buffer, { failOn: 'error' }).metadata();
     if (!meta.format || !SHARP_FORMATS.has(meta.format)) {
