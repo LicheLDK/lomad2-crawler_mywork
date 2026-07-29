@@ -36,6 +36,7 @@ interface JsonLdItemList {
 export class KarrotAdapter extends BaseHttpAdapter {
   readonly siteCode = SiteCode.KARROT;
   readonly siteName = '당근';
+  readonly ADAPTER_VERSION = '1';
 
   constructor(config: ConfigService) {
     super(config);

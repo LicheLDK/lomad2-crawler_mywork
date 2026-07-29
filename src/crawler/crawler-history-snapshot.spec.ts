@@ -115,6 +115,7 @@ describe('CrawlerService history snapshot (regression)', () => {
       { findOne: jest.fn(async () => ({ id: 'site-1' })) } as never,
       {} as never,
       historyResultRepo as never,
+      { create: jest.fn((d) => d), save: jest.fn(async (d) => d) } as never,
     );
   });
 

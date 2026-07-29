@@ -6,6 +6,7 @@ export { CrawlerResult } from './crawler-result.entity';
 export { ImageHash } from './image-hash.entity';
 export { SearchJob, SearchJobStatus } from './search-job.entity';
 export { SearchJobHistory } from './search-job-history.entity';
+export { CrawlSiteAttempt } from './crawl-site-attempt.entity';
 export { AiUsageLog } from './ai-usage-log.entity';
 export {
   AiRule,

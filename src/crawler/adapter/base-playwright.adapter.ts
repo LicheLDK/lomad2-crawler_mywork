@@ -3,6 +3,10 @@ import { ConfigService } from '@nestjs/config';
 import { Logger } from '@nestjs/common';
 import { sleep } from '@/common/utils/string.util';
 import {
+  CrawlAdapterError,
+  isTimeoutLike,
+} from './crawl-adapter.error';
+import {
   NormalizedListing,
   SearchAdapter,
   SearchAdapterOptions,
@@ -12,6 +16,7 @@ export abstract class BasePlaywrightAdapter implements SearchAdapter {
   protected readonly logger: Logger;
   abstract readonly siteCode: string;
   abstract readonly siteName: string;
+  abstract readonly ADAPTER_VERSION: string;
 
   private browser: Browser | null = null;
 
@@ -69,10 +74,27 @@ export abstract class BasePlaywrightAdapter implements SearchAdapter {
       const url = this.buildSearchUrl(options);
       this.logger.log(`[${this.siteCode}] crawl: ${url}`);
 
-      await page.goto(url, {
-        waitUntil: 'domcontentloaded',
-        timeout: this.config.get<number>('crawler.navigationTimeoutMs'),
-      });
+      try {
+        await page.goto(url, {
+          waitUntil: 'domcontentloaded',
+          timeout: this.config.get<number>('crawler.navigationTimeoutMs'),
+        });
+      } catch (error) {
+        if (isTimeoutLike(error)) {
+          throw new CrawlAdapterError({
+            message: `[${this.siteCode}] TIMEOUT navigating ${url}`,
+            errorCode: 'TIMEOUT',
+            cause: error,
+          });
+        }
+        const message =
+          error instanceof Error ? error.message : String(error);
+        throw new CrawlAdapterError({
+          message: `[${this.siteCode}] NAVIGATION failed: ${message}`,
+          errorCode: 'NAVIGATION',
+          cause: error,
+        });
+      }
 
       await this.afterNavigate(page);
       await sleep(this.config.get<number>('crawler.requestDelayMs') || 1500);

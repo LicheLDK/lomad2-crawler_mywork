@@ -15,6 +15,7 @@ import {
 export class BungaeAdapter extends BaseHttpAdapter {
   readonly siteCode = SiteCode.BUNGAE;
   readonly siteName = '번개장터';
+  readonly ADAPTER_VERSION = '1';
 
   constructor(config: ConfigService) {
     super(config);

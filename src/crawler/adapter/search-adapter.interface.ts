@@ -19,6 +19,8 @@ export interface SearchAdapterOptions {
 export interface SearchAdapter {
   readonly siteCode: string;
   readonly siteName: string;
+  /** 배포마다 올리는 어댑터 버전 (attempt 기록용, B7) */
+  readonly ADAPTER_VERSION: string;
 
   /** 검색 페이지 진입 및 HTML/데이터 수집 */
   search(options: SearchAdapterOptions): Promise<string>;

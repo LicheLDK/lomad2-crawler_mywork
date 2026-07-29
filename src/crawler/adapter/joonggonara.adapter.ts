@@ -17,6 +17,7 @@ import {
 export class JoonggonaraAdapter extends BasePlaywrightAdapter {
   readonly siteCode = SiteCode.JOONGGONARA;
   readonly siteName = '중고나라';
+  readonly ADAPTER_VERSION = '1';
 
   constructor(config: ConfigService) {
     super(config);

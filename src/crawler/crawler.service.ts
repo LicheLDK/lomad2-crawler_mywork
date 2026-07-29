@@ -2,8 +2,10 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AdapterRegistry } from './adapter/adapter.registry';
+import { CrawlAdapterError } from './adapter/crawl-adapter.error';
 import { NormalizedListing } from './adapter/search-adapter.interface';
 import {
+  CrawlSiteAttempt,
   CrawlerResult,
   CrawlerSite,
   ImageHash,
@@ -21,6 +23,8 @@ import { ImageStorageService } from '@/storage/image-storage.service';
 import { CrawlProgressPublisher } from '@/progress/crawl-progress.publisher';
 import { CrawlProgressStatus } from '@/progress/crawl-progress.types';
 import { InvestigationService } from '@/modules/investigation/investigation.service';
+
+const ATTEMPT_ERROR_MESSAGE_MAX = 2000;
 
 export interface CrawlJobPayload {
   searchHistoryId: string;
@@ -51,6 +55,8 @@ export class CrawlerService {
     private readonly imageHashRepo: Repository<ImageHash>,
     @InjectRepository(SearchHistoryResult)
     private readonly historyResultRepo: Repository<SearchHistoryResult>,
+    @InjectRepository(CrawlSiteAttempt)
+    private readonly attemptRepo: Repository<CrawlSiteAttempt>,
   ) {}
 
   async executeCrawl(payload: CrawlJobPayload): Promise<{
@@ -98,6 +104,13 @@ export class CrawlerService {
         message: `${adapter.siteCode} 검색중`,
       });
 
+      const startedAt = Date.now();
+      let success = false;
+      let resultCount = 0;
+      let errorCode: string | null = null;
+      let responseStatus: number | null = null;
+      let errorMessage: string | null = null;
+
       try {
         this.logger.log(
           `Crawl start site=${adapter.siteCode} keyword=${payload.keyword}`,
@@ -106,6 +119,12 @@ export class CrawlerService {
           keyword: payload.keyword,
           maxResults: payload.maxResultsPerSite ?? 20,
         });
+
+        resultCount = listings.length;
+        success = true;
+        if (listings.length === 0) {
+          errorCode = 'PARSE_EMPTY';
+        }
 
         for (const listing of listings) {
           const created = await this.upsertResult(
@@ -129,13 +148,27 @@ export class CrawlerService {
           }
         }
       } catch (error) {
-        const message =
-          error instanceof Error ? error.message : String(error);
+        const parsed = this.parseCrawlError(error);
+        errorCode = parsed.errorCode;
+        responseStatus = parsed.responseStatus;
+        errorMessage = parsed.errorMessage;
         this.logger.error(
-          `Crawl failed site=${adapter.siteCode}: ${message}`,
+          `Crawl failed site=${adapter.siteCode}: ${errorMessage}`,
         );
-        errors.push(`${adapter.siteCode}: ${message}`);
+        errors.push(`${adapter.siteCode}: ${errorMessage}`);
       }
+
+      await this.recordSiteAttempt({
+        searchHistoryId: history.id,
+        siteCode: adapter.siteCode,
+        success,
+        durationMs: Math.max(0, Date.now() - startedAt),
+        resultCount,
+        errorCode,
+        responseStatus,
+        adapterVersion: adapter.ADAPTER_VERSION,
+        errorMessage,
+      });
 
       completedSites.push(adapter.siteCode);
       await this.emitProgress({
@@ -195,6 +228,83 @@ export class CrawlerService {
     }
 
     return { searchHistoryId: history.id, saved, errors };
+  }
+
+  /**
+   * 사이트 시도 기록. 실패해도 크롤 전체를 중단하지 않는다 (A-3 dual-write 와 동일).
+   */
+  private async recordSiteAttempt(input: {
+    searchHistoryId: string;
+    siteCode: string;
+    success: boolean;
+    durationMs: number;
+    resultCount: number;
+    errorCode: string | null;
+    responseStatus: number | null;
+    adapterVersion: string;
+    errorMessage: string | null;
+  }): Promise<void> {
+    try {
+      await this.attemptRepo.save(
+        this.attemptRepo.create({
+          searchHistoryId: input.searchHistoryId,
+          siteCode: input.siteCode,
+          success: input.success,
+          durationMs: input.durationMs,
+          resultCount: input.resultCount,
+          errorCode: input.errorCode,
+          responseStatus: input.responseStatus,
+          adapterVersion: input.adapterVersion,
+          errorMessage: input.errorMessage
+            ? input.errorMessage.slice(0, ATTEMPT_ERROR_MESSAGE_MAX)
+            : null,
+        }),
+      );
+    } catch (error) {
+      this.logger.warn(
+        `Crawl site attempt recording failed site=${input.siteCode}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
+  }
+
+  private parseCrawlError(error: unknown): {
+    errorCode: string;
+    responseStatus: number | null;
+    errorMessage: string;
+  } {
+    if (error instanceof CrawlAdapterError) {
+      return {
+        errorCode: error.errorCode,
+        responseStatus: error.responseStatus,
+        errorMessage: error.message,
+      };
+    }
+
+    const errorMessage =
+      error instanceof Error ? error.message : String(error);
+    const httpMatch = errorMessage.match(/HTTP\s+(\d{3})/i);
+    if (httpMatch) {
+      const status = Number(httpMatch[1]);
+      return {
+        errorCode: `HTTP_${status}`,
+        responseStatus: status,
+        errorMessage,
+      };
+    }
+    if (/timeout|aborted/i.test(errorMessage)) {
+      return {
+        errorCode: 'TIMEOUT',
+        responseStatus: null,
+        errorMessage,
+      };
+    }
+    return {
+      errorCode: 'UNKNOWN',
+      responseStatus: null,
+      errorMessage,
+    };
   }
 
   private async emitProgress( partial: {
