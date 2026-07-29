@@ -4,6 +4,7 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { LoggerModule } from 'nestjs-pino';
 import { configs } from './config';
+import { buildPinoHttpOptions } from './config/logger.config';
 import { DatabaseModule } from './database/database.module';
 import { SiteSeedService } from './database/site-seed.service';
 import { SearchModule } from './modules/search/search.module';
@@ -28,14 +29,7 @@ import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
       envFilePath: ['.env', '.env.local'],
     }),
     LoggerModule.forRoot({
-      pinoHttp: {
-        transport:
-          process.env.NODE_ENV !== 'production'
-            ? { target: 'pino-pretty', options: { singleLine: true } }
-            : undefined,
-        autoLogging: true,
-        quietReqLogger: true,
-      },
+      pinoHttp: buildPinoHttpOptions(),
     }),
     ThrottlerModule.forRoot([
       {

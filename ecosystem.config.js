@@ -17,6 +17,10 @@
  *
  * 종료:
  *   npm run pm2:stop
+ *
+ * 구조화 앱 로그(JSON):
+ *   logs/api/current.log | logs/worker/current.log | logs/web/web.log
+ * Ubuntu 로테이션: deploy/logrotate/lomad-crawler
  */
 const path = require('path');
 
@@ -36,10 +40,11 @@ module.exports = {
       env: {
         NODE_ENV: 'production',
         ENABLE_WORKER: 'false',
+        LOG_APP: 'api',
         PORT: 3100,
       },
-      out_file: path.join(__dirname, 'logs/crawler-api-out.log'),
-      error_file: path.join(__dirname, 'logs/crawler-api-error.log'),
+      out_file: path.join(__dirname, 'logs/api/pm2-out.log'),
+      error_file: path.join(__dirname, 'logs/api/pm2-error.log'),
       log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
       merge_logs: true,
     },
@@ -57,9 +62,10 @@ module.exports = {
       env: {
         NODE_ENV: 'production',
         ENABLE_WORKER: 'true',
+        LOG_APP: 'worker',
       },
-      out_file: path.join(__dirname, 'logs/crawler-worker-out.log'),
-      error_file: path.join(__dirname, 'logs/crawler-worker-error.log'),
+      out_file: path.join(__dirname, 'logs/worker/pm2-out.log'),
+      error_file: path.join(__dirname, 'logs/worker/pm2-error.log'),
       log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
       merge_logs: true,
     },
@@ -76,9 +82,10 @@ module.exports = {
       max_memory_restart: '256M',
       env: {
         NODE_ENV: 'production',
+        LOG_APP: 'web',
       },
-      out_file: path.join(__dirname, 'logs/crawler-web-out.log'),
-      error_file: path.join(__dirname, 'logs/crawler-web-error.log'),
+      out_file: path.join(__dirname, 'logs/web/pm2-out.log'),
+      error_file: path.join(__dirname, 'logs/web/pm2-error.log'),
       log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
       merge_logs: true,
     },
