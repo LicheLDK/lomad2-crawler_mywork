@@ -10,6 +10,7 @@ import { Repository } from 'typeorm';
 import Redis from 'ioredis';
 import {
   SearchJob,
+  SearchJobStatus,
 } from '@/database/entities/search-job.entity';
 import { SearchJobHistory } from '@/database/entities/search-job-history.entity';
 import {
@@ -21,13 +22,15 @@ import {
   SearchJobProgressEvent,
 } from './search-job-progress.types';
 import {
-  applyCrawlProgressToJob,
+  aggregateJobProgress,
   clampProgress,
+  isTerminalHistoryStatus,
 } from './search-job-status.util';
 
 /**
  * 크롤 progress(searchId) → Search Job progress(jobId) 동기화.
  * Redis pub/sub + DB 컬럼 갱신 + job progress 채널 발행.
+ * Job 완료 판정은 SearchJobService.finalizeJob 이 담당한다.
  */
 @Injectable()
 export class SearchJobProgressSync
@@ -112,18 +115,8 @@ export class SearchJobProgressSync
       const crawl = JSON.parse(message) as CrawlProgressEvent;
       if (!crawl?.searchId) return;
 
-      // TASK A-3: 키워드별 history 행 상태/결과수 갱신 (Job 판정은 변경하지 않음)
       await this.updateJobHistoryFromCrawl(crawl);
-
-      const job = await this.jobRepo.findOne({
-        where: { searchHistoryId: crawl.searchId },
-      });
-      if (!job) return;
-
-      applyCrawlProgressToJob(job, crawl);
-
-      await this.jobRepo.save(job);
-      await this.publishFromJob(job, crawl.message);
+      await this.refreshJobProgressFromHistories(crawl);
     } catch (error) {
       this.logger.warn(
         `Job progress sync failed: ${
@@ -134,7 +127,7 @@ export class SearchJobProgressSync
   }
 
   /**
-   * TASK A-3 이중 쓰기: crawl progress 로 search_job_histories 행을 갱신한다.
+   * crawl progress 로 search_job_histories 행을 갱신한다.
    * 실패해도 Job 동기화는 계속한다.
    */
   private async updateJobHistoryFromCrawl(
@@ -159,6 +152,89 @@ export class SearchJobProgressSync
           error instanceof Error ? error.message : String(error)
         }`,
       );
+    }
+  }
+
+  /**
+   * 키워드 N개 진행률을 합산해 Job progress 를 갱신한다.
+   * 완료/실패 판정은 하지 않는다.
+   */
+  private async refreshJobProgressFromHistories(
+    crawl: CrawlProgressEvent,
+  ): Promise<void> {
+    const linked = await this.jobHistoryRepo.find({
+      where: { searchHistoryId: crawl.searchId },
+    });
+
+    const jobIds = new Set(linked.map((r) => r.searchJobId));
+
+    // 레거시: history 행이 없고 대표 searchHistoryId 만 있는 Job
+    if (jobIds.size === 0) {
+      const legacy = await this.jobRepo.findOne({
+        where: { searchHistoryId: crawl.searchId },
+      });
+      if (legacy) jobIds.add(legacy.id);
+    }
+
+    for (const jobId of jobIds) {
+      const job = await this.jobRepo.findOne({ where: { id: jobId } });
+      if (!job) continue;
+      if (
+        job.status === SearchJobStatus.COMPLETED ||
+        job.status === SearchJobStatus.PARTIAL ||
+        job.status === SearchJobStatus.FAILED
+      ) {
+        continue;
+      }
+
+      const histories = await this.jobHistoryRepo.find({
+        where: { searchJobId: jobId },
+      });
+
+      if (histories.length > 0) {
+        job.progress = aggregateJobProgress(
+          histories.map((h) => ({
+            status: h.status,
+            percent:
+              h.searchHistoryId === crawl.searchId
+                ? crawl.percent
+                : isTerminalHistoryStatus(h.status)
+                  ? 100
+                  : undefined,
+          })),
+        );
+        job.currentSite = crawl.currentSite;
+        if (
+          job.status !== SearchJobStatus.RUNNING &&
+          job.status !== SearchJobStatus.QUEUED
+        ) {
+          job.status = SearchJobStatus.RUNNING;
+        } else if (crawl.status === 'queued') {
+          // keep queued only if all still queued — otherwise running
+          const anyRunning = histories.some(
+            (h) => h.status === 'running' || isTerminalHistoryStatus(h.status),
+          );
+          job.status = anyRunning
+            ? SearchJobStatus.RUNNING
+            : SearchJobStatus.QUEUED;
+        } else {
+          job.status = SearchJobStatus.RUNNING;
+        }
+      } else {
+        // 레거시 단일 히스토리 Job
+        job.progress = clampProgress(crawl.percent);
+        job.currentSite = crawl.currentSite;
+        if (!isTerminalHistoryStatus(crawl.status)) {
+          job.status =
+            crawl.status === 'queued'
+              ? SearchJobStatus.QUEUED
+              : SearchJobStatus.RUNNING;
+        }
+        job.resultCount = crawl.resultCount ?? job.resultCount;
+      }
+
+      await this.jobRepo.save(job);
+      await this.publishFromJob(job, crawl.message);
     }
   }
 

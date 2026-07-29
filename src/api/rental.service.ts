@@ -55,7 +55,7 @@ export class RentalService {
       investigationCount: payload.investigationCount,
       completedAt: payload.completedAt,
       orderNo: payload.orderNo ?? null,
-      status: 'completed',
+      status: payload.status ?? 'completed',
     });
 
     this.logger.log(

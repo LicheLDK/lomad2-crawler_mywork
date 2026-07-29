@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { SearchJob } from '@/database/entities/search-job.entity';
 import { SearchJobHistory } from '@/database/entities/search-job-history.entity';
+import { SearchHistoryResult } from '@/database/entities/search-history-result.entity';
 import { SearchModule } from '@/modules/search/search.module';
 import { InvestigationModule } from '@/modules/investigation/investigation.module';
 import { RentalModule } from '@/api/rental.module';
@@ -13,7 +14,11 @@ import { SearchKeywordGeneratorService } from './search-keyword-generator.servic
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([SearchJob, SearchJobHistory]),
+    TypeOrmModule.forFeature([
+      SearchJob,
+      SearchJobHistory,
+      SearchHistoryResult,
+    ]),
     SearchModule,
     InvestigationModule,
     RentalModule,

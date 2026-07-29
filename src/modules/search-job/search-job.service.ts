@@ -1,4 +1,10 @@
-import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import {
@@ -6,6 +12,7 @@ import {
   SearchJobStatus,
 } from '@/database/entities/search-job.entity';
 import { SearchJobHistory } from '@/database/entities/search-job-history.entity';
+import { SearchHistoryResult } from '@/database/entities/search-history-result.entity';
 import { SearchService } from '@/modules/search/search.service';
 import { CreateSearchJobDto } from './dto/create-search-job.dto';
 import { SearchJobProgressSync } from './search-job-progress.sync';
@@ -13,6 +20,14 @@ import { SearchKeywordGeneratorService } from './search-keyword-generator.servic
 import { InvestigationService } from '@/modules/investigation/investigation.service';
 import { RentalService } from '@/api/rental.service';
 import { AiService } from '@/ai/ai.service';
+import {
+  aggregateJobProgress,
+  isSuccessfulHistoryStatus,
+  isTerminalHistoryStatus,
+  resolveJobStatusFromHistories,
+} from './search-job-status.util';
+
+const POLL_INTERVAL_MS = 2000;
 
 @Injectable()
 export class SearchJobService {
@@ -23,12 +38,15 @@ export class SearchJobService {
     private readonly jobRepo: Repository<SearchJob>,
     @InjectRepository(SearchJobHistory)
     private readonly jobHistoryRepo: Repository<SearchJobHistory>,
+    @InjectRepository(SearchHistoryResult)
+    private readonly historyResultRepo: Repository<SearchHistoryResult>,
     private readonly searchService: SearchService,
     private readonly progressSync: SearchJobProgressSync,
     private readonly keywordGenerator: SearchKeywordGeneratorService,
     private readonly investigationService: InvestigationService,
     private readonly rentalService: RentalService,
     private readonly aiService: AiService,
+    private readonly config: ConfigService,
   ) {}
 
   /**
@@ -235,16 +253,11 @@ export class SearchJobService {
       await this.jobRepo.save(job);
       await this.progressSync.publishFromJob(job, 'Searching');
 
-      // 다중 검색어: 순차 실행. 첫 크롤 대기 Job 이 있으면 watch 후 마무리
-      let pendingWatchId: string | null = null;
-      let totalResults = 0;
-      let primaryHistoryId: string | null = null;
-      let anySuccess = false;
-
+      // A2: 대표 히스토리 = 첫 크롤 히스토리. A4: 모든 비종료 히스토리를 감시.
       for (let i = 0; i < keywords.length; i++) {
         const keyword = keywords[i];
-        const pct = 10 + Math.floor((i / keywords.length) * 70);
-        job.progress = Math.min(80, pct);
+        const pct = 10 + Math.floor((i / keywords.length) * 50);
+        job.progress = Math.min(60, pct);
         await this.jobRepo.save(job);
         await this.progressSync.publishFromJob(
           job,
@@ -259,65 +272,46 @@ export class SearchJobService {
           useCache: job.useCache,
         });
 
-        // TASK A-3: 이중 쓰기 — 완료 판정/집계는 기존 로직 유지
         await this.recordJobHistory(job.id, keyword, result);
 
-        if (result.status === 'failed') {
-          this.logger.warn(
-            `SearchJob ${job.id} keyword failed: ${keyword}`,
-          );
-          continue;
-        }
-
-        anySuccess = true;
-        if (!primaryHistoryId) {
-          primaryHistoryId = result.searchId;
+        if (result?.searchId && !job.searchHistoryId) {
+          // A2: 첫 히스토리를 대표로 유지
           job.searchHistoryId = result.searchId;
-        }
-
-        totalResults += result.resultCount ?? 0;
-        job.resultCount = totalResults;
-
-        const terminalCached =
-          result.status === 'cached' ||
-          result.status === 'completed' ||
-          result.status === 'partial';
-
-        if (!terminalCached && result.source !== 'cache') {
-          if (!pendingWatchId) {
-            pendingWatchId = result.searchId;
-            job.searchHistoryId = result.searchId;
-          }
         }
       }
 
-      job.resultCount = totalResults;
+      const rows = await this.jobHistoryRepo.find({
+        where: { searchJobId: job.id },
+      });
+      job.resultCount = await this.countDistinctResultIds(
+        rows.map((r) => r.searchHistoryId),
+      );
 
-      if (pendingWatchId) {
+      const pending = rows.filter(
+        (r) => !isTerminalHistoryStatus(r.status),
+      );
+
+      if (pending.length > 0) {
         job.status = SearchJobStatus.RUNNING;
-        job.progress = Math.max(job.progress, 20);
+        job.progress = Math.max(
+          job.progress,
+          aggregateJobProgress(
+            rows.map((r) => ({
+              status: r.status,
+              percent: isTerminalHistoryStatus(r.status) ? 100 : 10,
+            })),
+          ),
+        );
         await this.jobRepo.save(job);
         await this.progressSync.publishFromJob(job, 'Crawling');
-        void this.watchHistory(job.id, pendingWatchId);
-      } else if (anySuccess && primaryHistoryId) {
-        job.status = SearchJobStatus.COMPLETED;
-        job.progress = 100;
-        job.currentSite = null;
-        job.finishedAt = new Date();
-        job.errorMessage = null;
-        await this.jobRepo.save(job);
-        await this.progressSync.publishFromJob(job, 'Completed');
-        void this.triggerAutoInvestigation(job.id, primaryHistoryId);
+        void this.watchJobHistories(job.id);
       } else {
-        job.status = SearchJobStatus.FAILED;
-        job.finishedAt = new Date();
-        job.errorMessage = 'All keyword searches failed';
         await this.jobRepo.save(job);
-        await this.progressSync.publishFromJob(job, 'Failed');
+        await this.finalizeJob(job.id);
       }
 
       this.logger.log(
-        `SearchJob ${job.id} keywords=${keywords.length} history=${job.searchHistoryId} status=${job.status}`,
+        `SearchJob ${job.id} keywords=${keywords.length} history=${job.searchHistoryId} status=${job.status} pending=${pending.length}`,
       );
     } catch (error) {
       const message =
@@ -336,8 +330,8 @@ export class SearchJobService {
   }
 
   /**
-   * TASK A-3 이중 쓰기: search_job_histories 에 키워드별 행을 기록한다.
-   * 기록 실패는 검색 실패로 전파하지 않는다 (관찰용).
+   * search_job_histories 에 키워드별 행을 기록한다.
+   * 기록 실패는 검색 실패로 전파하지 않는다.
    */
   private async recordJobHistory(
     searchJobId: string,
@@ -352,18 +346,17 @@ export class SearchJobService {
     try {
       if (!result?.searchId) return;
 
-      const terminalCached =
-        result.status === 'cached' ||
-        result.status === 'completed' ||
-        result.status === 'partial';
-      const needsCrawl = !terminalCached && result.source !== 'cache';
+      const status = String(result.status ?? 'queued');
+      const terminal =
+        isTerminalHistoryStatus(status) || result.source === 'cache';
+      const needsCrawl = !terminal && result.source !== 'cache';
 
       await this.jobHistoryRepo.save(
         this.jobHistoryRepo.create({
           searchJobId,
           keyword,
           searchHistoryId: result.searchId,
-          status: needsCrawl ? 'queued' : String(result.status ?? 'queued'),
+          status: needsCrawl ? 'queued' : status,
           resultCount: result.resultCount ?? 0,
         }),
       );
@@ -376,62 +369,119 @@ export class SearchJobService {
     }
   }
 
-  /** 크롤이 끝날 때까지 search_history 상태를 Job 에 반영 */
-  private async watchHistory(
-    jobId: string,
-    searchHistoryId: string,
-  ): Promise<void> {
-    const terminal = new Set([
-      'completed',
-      'partial',
-      'failed',
-      'cached',
-    ]);
-    const maxAttempts = 90;
+  /**
+   * Job 의 모든 비종료 히스토리를 감시한다 (A3 이중 타임아웃).
+   * - 키워드별: SEARCH_JOB_KEYWORD_TIMEOUT_MS
+   * - Job 전체: SEARCH_JOB_TOTAL_TIMEOUT_MS
+   */
+  private async watchJobHistories(jobId: string): Promise<void> {
+    const keywordTimeoutMs = this.getKeywordTimeoutMs();
+    const totalTimeoutMs = this.getTotalTimeoutMs();
+    const watchStartedAt = Date.now();
 
-    for (let i = 0; i < maxAttempts; i++) {
-      await sleep(2000);
+    while (true) {
+      await this.sleep(POLL_INTERVAL_MS);
+
       try {
-        const detail = await this.searchService.getSearch(searchHistoryId);
         const job = await this.jobRepo.findOne({ where: { id: jobId } });
         if (!job) return;
-
-        job.resultCount = Math.max(
-          job.resultCount ?? 0,
-          detail.resultCount ?? 0,
-        );
-
-        if (!terminal.has(detail.status)) {
-          if (job.status === SearchJobStatus.RUNNING) {
-            await this.jobRepo.save(job);
-            await this.progressSync.publishFromJob(job, 'Crawling');
-          }
-          continue;
+        if (
+          job.status === SearchJobStatus.COMPLETED ||
+          job.status === SearchJobStatus.PARTIAL ||
+          job.status === SearchJobStatus.FAILED
+        ) {
+          return;
         }
 
-        job.status =
-          detail.status === 'failed'
-            ? SearchJobStatus.FAILED
-            : SearchJobStatus.COMPLETED;
-        job.errorMessage =
-          detail.status === 'failed'
-            ? detail.errorMessage || 'Search failed'
-            : null;
-        job.finishedAt = new Date();
-        job.progress = detail.status === 'failed' ? job.progress : 100;
-        job.currentSite = null;
+        const rows = await this.jobHistoryRepo.find({
+          where: { searchJobId: jobId },
+        });
+        if (rows.length === 0) {
+          await this.finalizeJob(jobId);
+          return;
+        }
+
+        const totalElapsed = Date.now() - watchStartedAt;
+        if (totalElapsed >= totalTimeoutMs) {
+          await this.markIncompleteRowsTimeout(rows);
+          await this.finalizeJob(jobId);
+          return;
+        }
+
+        let currentSite: string | null = null;
+        const percents = new Map<string, number>();
+
+        for (const row of rows) {
+          if (isTerminalHistoryStatus(row.status)) {
+            percents.set(row.id, 100);
+            continue;
+          }
+
+          const ageMs = Date.now() - new Date(row.createdAt).getTime();
+          if (ageMs >= keywordTimeoutMs) {
+            row.status = 'timeout';
+            await this.jobHistoryRepo.save(row);
+            percents.set(row.id, 100);
+            this.logger.warn(
+              `SearchJob ${jobId} keyword timed out history=${row.searchHistoryId} keyword=${row.keyword}`,
+            );
+            continue;
+          }
+
+          try {
+            const detail = await this.searchService.getSearch(
+              row.searchHistoryId,
+            );
+            row.status = String(detail.status ?? row.status);
+            row.resultCount = Math.max(
+              row.resultCount ?? 0,
+              detail.resultCount ?? 0,
+            );
+            await this.jobHistoryRepo.save(row);
+
+            if (!isTerminalHistoryStatus(row.status)) {
+              percents.set(row.id, 40);
+              currentSite = currentSite ?? null;
+            } else {
+              percents.set(row.id, 100);
+            }
+          } catch (error) {
+            this.logger.warn(
+              `SearchJob ${jobId} watch poll error history=${row.searchHistoryId}: ${
+                error instanceof Error ? error.message : String(error)
+              }`,
+            );
+            percents.set(row.id, 20);
+          }
+        }
+
+        const refreshed = await this.jobHistoryRepo.find({
+          where: { searchJobId: jobId },
+        });
+        const allTerminal = refreshed.every((r) =>
+          isTerminalHistoryStatus(r.status),
+        );
+
+        job.resultCount = await this.countDistinctResultIds(
+          refreshed.map((r) => r.searchHistoryId),
+        );
+        job.progress = aggregateJobProgress(
+          refreshed.map((r) => ({
+            status: r.status,
+            percent: percents.get(r.id) ?? undefined,
+          })),
+        );
+        job.currentSite = currentSite;
         await this.jobRepo.save(job);
         await this.progressSync.publishFromJob(
           job,
-          detail.status === 'failed' ? 'Failed' : 'Completed',
+          allTerminal ? 'Finalizing' : 'Crawling',
         );
-        if (detail.status !== 'failed') {
-          void this.triggerAutoInvestigation(jobId, searchHistoryId);
+
+        if (allTerminal) {
+          await this.finalizeJob(jobId);
+          return;
         }
-        this.logger.log(
-          `SearchJob ${jobId} finished via history status=${detail.status}`,
-        );
-        return;
       } catch (error) {
         this.logger.warn(
           `SearchJob ${jobId} watch error: ${
@@ -440,112 +490,158 @@ export class SearchJobService {
         );
       }
     }
+  }
 
-    await this.jobRepo.update(jobId, {
-      status: SearchJobStatus.FAILED,
-      errorMessage: 'Search timed out while waiting for crawl',
-      finishedAt: new Date(),
-    });
-    const timedOut = await this.jobRepo.findOne({ where: { id: jobId } });
-    if (timedOut) {
-      await this.progressSync.publishFromJob(timedOut, 'Timed out');
+  private async markIncompleteRowsTimeout(
+    rows: SearchJobHistory[],
+  ): Promise<void> {
+    const incomplete = rows.filter(
+      (r) => !isTerminalHistoryStatus(r.status),
+    );
+    for (const row of incomplete) {
+      row.status = 'timeout';
+    }
+    if (incomplete.length > 0) {
+      await this.jobHistoryRepo.save(incomplete);
     }
   }
 
+  /**
+   * 모든 히스토리가 terminal 일 때 Job 상태·집계·조사를 확정한다.
+   */
+  private async finalizeJob(jobId: string): Promise<void> {
+    const job = await this.jobRepo.findOne({ where: { id: jobId } });
+    if (!job) return;
+    if (
+      job.finishedAt &&
+      (job.status === SearchJobStatus.COMPLETED ||
+        job.status === SearchJobStatus.PARTIAL ||
+        job.status === SearchJobStatus.FAILED)
+    ) {
+      return;
+    }
+
+    const rows = await this.jobHistoryRepo.find({
+      where: { searchJobId: jobId },
+    });
+
+    // dual-write 실패 등으로 행이 없으면 대표 히스토리로 완료 처리 (검색 자체는 성공)
+    if (rows.length === 0) {
+      if (!job.searchHistoryId) {
+        job.status = SearchJobStatus.FAILED;
+        job.progress = job.progress || 0;
+        job.finishedAt = new Date();
+        job.errorMessage = 'No search histories recorded';
+        await this.jobRepo.save(job);
+        await this.progressSync.publishFromJob(job, 'Failed');
+        return;
+      }
+      job.status = SearchJobStatus.COMPLETED;
+      job.progress = 100;
+      job.currentSite = null;
+      job.finishedAt = new Date();
+      job.errorMessage = null;
+      job.resultCount = await this.countDistinctResultIds([
+        job.searchHistoryId,
+      ]);
+      await this.jobRepo.save(job);
+      await this.progressSync.publishFromJob(job, 'Completed');
+      await this.triggerAutoInvestigation(jobId);
+      return;
+    }
+
+    const statuses = rows.map((r) => r.status);
+    const jobStatus = resolveJobStatusFromHistories(statuses);
+
+    // A1: Job resultCount = 고유 resultId 수 (키워드별 합계와 다를 수 있음)
+    job.resultCount = await this.countDistinctResultIds(
+      rows.map((r) => r.searchHistoryId),
+    );
+    job.status = jobStatus;
+    job.progress = 100;
+    job.currentSite = null;
+    job.finishedAt = new Date();
+    job.errorMessage =
+      jobStatus === SearchJobStatus.FAILED
+        ? 'All keyword searches failed or timed out'
+        : jobStatus === SearchJobStatus.PARTIAL
+          ? 'Some keyword searches failed or timed out'
+          : null;
+
+    await this.jobRepo.save(job);
+    await this.progressSync.publishFromJob(
+      job,
+      jobStatus === SearchJobStatus.FAILED
+        ? 'Failed'
+        : jobStatus === SearchJobStatus.PARTIAL
+          ? 'Partial'
+          : 'Completed',
+    );
+
+    this.logger.log(
+      `SearchJob ${jobId} finalized status=${jobStatus} resultCount=${job.resultCount} histories=${rows.length}`,
+    );
+
+    if (
+      jobStatus === SearchJobStatus.COMPLETED ||
+      jobStatus === SearchJobStatus.PARTIAL
+    ) {
+      await this.triggerAutoInvestigation(jobId);
+    }
+  }
+
+  /**
+   * A1: Job에 속한 모든 히스토리의 고유 resultId 수.
+   * 키워드별 resultCount 합계 ≠ Job resultCount 가 정상이다 (중복 매물).
+   */
+  private async countDistinctResultIds(
+    searchHistoryIds: string[],
+  ): Promise<number> {
+    const ids = [...new Set(searchHistoryIds.filter(Boolean))];
+    if (ids.length === 0) return 0;
+
+    const raw = await this.historyResultRepo
+      .createQueryBuilder('shr')
+      .select('COUNT(DISTINCT shr.resultId)', 'cnt')
+      .where('shr.searchHistoryId IN (:...ids)', { ids })
+      .getRawOne<{ cnt: string }>();
+
+    return parseInt(raw?.cnt ?? '0', 10) || 0;
+  }
+
+  /**
+   * 조사 케이스 생성 — Job의 모든 성공 히스토리를 순회한다.
+   * P0 upsert·exclude 정책은 InvestigationService.autoCreateFromSearch 에 위임.
+   */
   private async triggerAutoInvestigation(
     searchJobId: string,
-    searchHistoryId: string,
   ): Promise<void> {
     try {
-      const job = await this.jobRepo.findOne({ where: { id: searchJobId } });
-      const detail = await this.searchService.getSearch(searchHistoryId);
-      let results = Array.isArray(detail.results)
-        ? (
-            detail.results as Array<{
-              id: string;
-              title: string;
-              siteCode: string;
-              url: string;
-              imageUrl?: string | null;
-              price?: string | null;
-              description?: string | null;
-              titleSimilarity?: number | null;
-              imageSimilarity?: number | null;
-              matchingScore?: number | null;
-              aiScore?: number | null;
-              matchingReason?: string | null;
-              matchingScores?: {
-                brand?: number;
-                model?: number;
-                productName?: number;
-                price?: number;
-                option?: number;
-                color?: number;
-                image?: number;
-                description?: number;
-                ocr?: number;
-              } | null;
-            }>
-          )
-        : [];
+      const job = await this.jobRepo.findOne({
+        where: { id: searchJobId },
+      });
+      const rows = await this.jobHistoryRepo.find({
+        where: { searchJobId },
+      });
+      const targets = rows.filter((r) =>
+        isSuccessfulHistoryStatus(r.status),
+      );
 
-      // AI Matching Engine — 렌탈 상품 vs 검색 결과
-      if (job && this.aiService.canMatch() && results.length > 0) {
-        try {
-          const matches = await this.aiService.matchSearchResults({
-            rental: this.toMatchingRentalSnapshot(job),
-            listings: results.map((r) => ({
-              id: r.id,
-              title: r.title,
-              price: r.price,
-              imageUrl: r.imageUrl,
-              description: r.description,
-              siteCode: r.siteCode,
-              url: r.url,
-              titleSimilarity: r.titleSimilarity,
-              imageSimilarity: r.imageSimilarity,
-            })),
-          });
-          const byId = new Map(
-            matches
-              .filter((m) => m.listingId)
-              .map((m) => [m.listingId as string, m]),
-          );
-          results = results.map((r) => {
-            const m = byId.get(r.id);
-            if (!m) return r;
-            return {
-              ...r,
-              matchingScore: m.matchingScore,
-              aiScore: m.aiScore,
-              matchingReason: m.reason,
-              matchingScores: m.scores,
-              // heuristic 필드도 AI 점수로 보강 (0~1)
-              titleSimilarity: m.scores.productName / 100,
-              imageSimilarity: m.scores.image / 100,
-            };
-          });
-          this.logger.log(
-            `SearchJob ${searchJobId}: AI Matching applied to ${matches.length} listing(s)`,
-          );
-        } catch (error) {
-          this.logger.warn(
-            `SearchJob ${searchJobId} AI Matching skipped: ${
-              error instanceof Error ? error.message : String(error)
-            }`,
+      // 히스토리 행이 없으면(레거시) 대표 searchHistoryId 로 1회 시도
+      if (targets.length === 0 && job?.searchHistoryId) {
+        await this.investigateOneHistory(
+          searchJobId,
+          job,
+          job.searchHistoryId,
+        );
+      } else {
+        for (const row of targets) {
+          await this.investigateOneHistory(
+            searchJobId,
+            job,
+            row.searchHistoryId,
           );
         }
-      }
-
-      const result = await this.investigationService.autoCreateFromSearch({
-        searchHistoryId,
-        searchJobId,
-        results,
-      });
-      if (result.created.length) {
-        this.logger.log(
-          `SearchJob ${searchJobId}: auto-created ${result.created.length} investigation(s)`,
-        );
       }
     } catch (error) {
       this.logger.warn(
@@ -558,7 +654,101 @@ export class SearchJobService {
     await this.sendBackOfficeCallback(searchJobId);
   }
 
-  /** 검색 완료 → BackOffice Callback (Job ID · Investigation Count · Completed At) */
+  private async investigateOneHistory(
+    searchJobId: string,
+    job: SearchJob | null,
+    searchHistoryId: string,
+  ): Promise<void> {
+    const detail = await this.searchService.getSearch(searchHistoryId);
+    let results = Array.isArray(detail.results)
+      ? (
+          detail.results as Array<{
+            id: string;
+            title: string;
+            siteCode: string;
+            url: string;
+            imageUrl?: string | null;
+            price?: string | null;
+            description?: string | null;
+            titleSimilarity?: number | null;
+            imageSimilarity?: number | null;
+            matchingScore?: number | null;
+            aiScore?: number | null;
+            matchingReason?: string | null;
+            matchingScores?: {
+              brand?: number;
+              model?: number;
+              productName?: number;
+              price?: number;
+              option?: number;
+              color?: number;
+              image?: number;
+              description?: number;
+              ocr?: number;
+            } | null;
+          }>
+        )
+      : [];
+
+    if (job && this.aiService.canMatch() && results.length > 0) {
+      try {
+        const matches = await this.aiService.matchSearchResults({
+          rental: this.toMatchingRentalSnapshot(job),
+          listings: results.map((r) => ({
+            id: r.id,
+            title: r.title,
+            price: r.price,
+            imageUrl: r.imageUrl,
+            description: r.description,
+            siteCode: r.siteCode,
+            url: r.url,
+            titleSimilarity: r.titleSimilarity,
+            imageSimilarity: r.imageSimilarity,
+          })),
+        });
+        const byId = new Map(
+          matches
+            .filter((m) => m.listingId)
+            .map((m) => [m.listingId as string, m]),
+        );
+        results = results.map((r) => {
+          const m = byId.get(r.id);
+          if (!m) return r;
+          return {
+            ...r,
+            matchingScore: m.matchingScore,
+            aiScore: m.aiScore,
+            matchingReason: m.reason,
+            matchingScores: m.scores,
+            titleSimilarity: m.scores.productName / 100,
+            imageSimilarity: m.scores.image / 100,
+          };
+        });
+        this.logger.log(
+          `SearchJob ${searchJobId}: AI Matching applied to ${matches.length} listing(s) history=${searchHistoryId}`,
+        );
+      } catch (error) {
+        this.logger.warn(
+          `SearchJob ${searchJobId} AI Matching skipped history=${searchHistoryId}: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      }
+    }
+
+    const result = await this.investigationService.autoCreateFromSearch({
+      searchHistoryId,
+      searchJobId,
+      results,
+    });
+    if (result.created.length) {
+      this.logger.log(
+        `SearchJob ${searchJobId}: auto-created ${result.created.length} investigation(s) history=${searchHistoryId}`,
+      );
+    }
+  }
+
+  /** 검색 완료 → BackOffice Callback (COMPLETED / PARTIAL) */
   private async sendBackOfficeCallback(searchJobId: string): Promise<void> {
     const job = await this.jobRepo.findOne({ where: { id: searchJobId } });
     if (!job) return;
@@ -566,7 +756,12 @@ export class SearchJobService {
       this.logger.debug(`Callback already sent jobId=${searchJobId}`);
       return;
     }
-    if (job.status !== SearchJobStatus.COMPLETED) return;
+    if (
+      job.status !== SearchJobStatus.COMPLETED &&
+      job.status !== SearchJobStatus.PARTIAL
+    ) {
+      return;
+    }
 
     const investigationCount =
       await this.investigationService.countBySearchJobId(searchJobId);
@@ -578,7 +773,8 @@ export class SearchJobService {
         investigationCount,
         completedAt,
         orderNo: job.orderNo,
-        status: 'completed',
+        status:
+          job.status === SearchJobStatus.PARTIAL ? 'partial' : 'completed',
       });
       if (sent) {
         await this.jobRepo.update(searchJobId, {
@@ -596,6 +792,25 @@ export class SearchJobService {
         callbackError: message.slice(0, 1000),
       });
     }
+  }
+
+  private getKeywordTimeoutMs(): number {
+    const value = this.config.get<number>('searchJob.keywordTimeoutMs');
+    return Number.isFinite(value) && (value as number) > 0
+      ? (value as number)
+      : 180_000;
+  }
+
+  private getTotalTimeoutMs(): number {
+    const value = this.config.get<number>('searchJob.totalTimeoutMs');
+    return Number.isFinite(value) && (value as number) > 0
+      ? (value as number)
+      : 600_000;
+  }
+
+  /** @internal test seam */
+  private sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   private toCreateResponse(job: SearchJob) {
@@ -619,6 +834,7 @@ export class SearchJobService {
       searchHistoryId: job.searchHistoryId,
       progress: job.progress,
       currentSite: job.currentSite,
+      // A1: 고유 매물 수 (키워드별 합계와 다를 수 있음)
       resultCount: job.resultCount,
       errorMessage: job.errorMessage,
       finishedAt: job.finishedAt,
@@ -638,8 +854,4 @@ export class SearchJobService {
       imageUrl: job.referenceImageUrl ?? null,
     };
   }
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }

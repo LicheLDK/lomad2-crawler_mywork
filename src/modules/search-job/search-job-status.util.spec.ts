@@ -1,8 +1,11 @@
 import { SearchJobStatus } from '@/database/entities/search-job.entity';
 import { CrawlProgressEvent } from '@/progress/crawl-progress.types';
 import {
+  aggregateJobProgress,
   applyCrawlProgressToJob,
   clampProgress,
+  isTerminalHistoryStatus,
+  resolveJobStatusFromHistories,
   SearchJobProgressFields,
 } from './search-job-status.util';
 
@@ -51,8 +54,73 @@ describe('clampProgress', () => {
   });
 });
 
+describe('resolveJobStatusFromHistories (A4)', () => {
+  it('all success → completed', () => {
+    expect(
+      resolveJobStatusFromHistories(['completed', 'cached', 'partial']),
+    ).toBe(SearchJobStatus.COMPLETED);
+  });
+
+  it('some success + some failure/timeout → partial', () => {
+    expect(
+      resolveJobStatusFromHistories(['completed', 'failed', 'cached']),
+    ).toBe(SearchJobStatus.PARTIAL);
+    expect(
+      resolveJobStatusFromHistories(['cached', 'timeout']),
+    ).toBe(SearchJobStatus.PARTIAL);
+  });
+
+  it('all failure → failed', () => {
+    expect(resolveJobStatusFromHistories(['failed', 'timeout'])).toBe(
+      SearchJobStatus.FAILED,
+    );
+  });
+
+  it('empty → failed', () => {
+    expect(resolveJobStatusFromHistories([])).toBe(SearchJobStatus.FAILED);
+  });
+});
+
+describe('aggregateJobProgress', () => {
+  it('averages terminal and in-progress keywords', () => {
+    expect(
+      aggregateJobProgress([
+        { status: 'completed' },
+        { status: 'running', percent: 40 },
+        { status: 'queued' },
+      ]),
+    ).toBe(50); // (100 + 40 + 10) / 3
+  });
+
+  it('all terminal → 100', () => {
+    expect(
+      aggregateJobProgress([
+        { status: 'completed' },
+        { status: 'failed' },
+        { status: 'timeout' },
+      ]),
+    ).toBe(100);
+  });
+});
+
+describe('isTerminalHistoryStatus', () => {
+  it.each(['completed', 'partial', 'failed', 'cached', 'timeout'])(
+    '%s is terminal',
+    (status) => {
+      expect(isTerminalHistoryStatus(status)).toBe(true);
+    },
+  );
+
+  it.each(['queued', 'running', 'pending'])(
+    '%s is not terminal',
+    (status) => {
+      expect(isTerminalHistoryStatus(status)).toBe(false);
+    },
+  );
+});
+
 describe('applyCrawlProgressToJob', () => {
-  it('queued → running → completed', () => {
+  it('queued → running without finalizing the job', () => {
     const job = baseJob({ status: SearchJobStatus.PENDING });
 
     applyCrawlProgressToJob(
@@ -74,36 +142,20 @@ describe('applyCrawlProgressToJob', () => {
     expect(job.currentSite).toBe('bungae');
     expect(job.resultCount).toBe(5);
 
+    // 개별 크롤 completed 여도 Job 은 RUNNING (다른 키워드 대기)
     applyCrawlProgressToJob(
       job,
       crawl({ status: 'completed', percent: 100, resultCount: 12 }),
     );
-    expect(job.status).toBe(SearchJobStatus.COMPLETED);
-    expect(job.progress).toBe(100);
-    expect(job.currentSite).toBeNull();
-    expect(job.finishedAt).toBeInstanceOf(Date);
+    expect(job.status).toBe(SearchJobStatus.RUNNING);
+    expect(job.finishedAt).toBeNull();
   });
 
-  it('partial also completes the job', () => {
-    const job = baseJob({ status: SearchJobStatus.RUNNING });
-    applyCrawlProgressToJob(job, crawl({ status: 'partial', percent: 80 }));
-    expect(job.status).toBe(SearchJobStatus.COMPLETED);
-    expect(job.progress).toBe(100);
-  });
-
-  it('failed sets error and finishedAt', () => {
-    const job = baseJob({ status: SearchJobStatus.RUNNING });
-    applyCrawlProgressToJob(
-      job,
-      crawl({ status: 'failed', percent: 50, message: 'timeout' }),
-    );
-    expect(job.status).toBe(SearchJobStatus.FAILED);
-    expect(job.errorMessage).toBe('timeout');
-    expect(job.finishedAt).toBeInstanceOf(Date);
-  });
-
-  it('does not reopen completed/failed jobs on late running events', () => {
-    const completed = baseJob({ status: SearchJobStatus.COMPLETED, progress: 100 });
+  it('does not reopen completed/failed/partial jobs', () => {
+    const completed = baseJob({
+      status: SearchJobStatus.COMPLETED,
+      progress: 100,
+    });
     applyCrawlProgressToJob(
       completed,
       crawl({ status: 'running', percent: 10, currentSite: 'karrot' }),
@@ -111,10 +163,14 @@ describe('applyCrawlProgressToJob', () => {
     expect(completed.status).toBe(SearchJobStatus.COMPLETED);
 
     const failed = baseJob({ status: SearchJobStatus.FAILED });
-    applyCrawlProgressToJob(
-      failed,
-      crawl({ status: 'queued', percent: 0 }),
-    );
+    applyCrawlProgressToJob(failed, crawl({ status: 'queued', percent: 0 }));
     expect(failed.status).toBe(SearchJobStatus.FAILED);
+
+    const partial = baseJob({ status: SearchJobStatus.PARTIAL });
+    applyCrawlProgressToJob(
+      partial,
+      crawl({ status: 'running', percent: 20 }),
+    );
+    expect(partial.status).toBe(SearchJobStatus.PARTIAL);
   });
 });

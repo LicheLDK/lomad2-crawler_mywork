@@ -58,7 +58,7 @@ export class RentalClient {
     investigationCount: number;
     completedAt: string;
     orderNo?: string | null;
-    status?: 'completed';
+    status?: 'completed' | 'partial';
   }): Promise<void> {
     const path =
       this.config.get<string>('rental.callbackPath') ||

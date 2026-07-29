@@ -113,7 +113,8 @@ export interface SearchCompletedCallbackPayload {
   investigationCount: number;
   completedAt: string;
   orderNo?: string | null;
-  status?: 'completed';
+  /** completed | partial — Job 단위 최종 상태 */
+  status?: 'completed' | 'partial';
 }
 
 export class RentalApiError extends Error {
