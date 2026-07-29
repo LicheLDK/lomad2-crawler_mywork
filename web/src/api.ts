@@ -54,6 +54,12 @@ export const api = {
   },
   aiUsageByProvider: () =>
     request<import('./types').AiUsageByProvider[]>('/ai/usage/by-provider'),
+  aiPromptsTree: () =>
+    request<import('./types').AiPromptTreeNode[]>('/ai/prompts'),
+  aiRulesActive: () =>
+    request<import('./types').AiRuleDefinition[]>('/ai/rules/active'),
+  aiRulesCreateThreshold: () =>
+    request<import('./types').AiCreateThreshold>('/ai/rules/create-threshold'),
   search: (body: unknown) =>
     request<import('./types').SearchDetail>('/search', {
       method: 'POST',

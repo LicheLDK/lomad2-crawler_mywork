@@ -17,6 +17,8 @@ import {
 import { useSearchParams } from 'react-router-dom';
 import { api, formatApiError } from '../api';
 import type {
+  AiPromptTreeNode,
+  AiRuleDefinition,
   AiUsageSummary,
   FailedQueueJobItem,
   HealthPayload,
@@ -25,6 +27,10 @@ import type {
 type ServiceStatus = 'ONLINE' | 'OFFLINE' | 'WARNING' | 'READY';
 
 type AiUsageLoadState = 'loading' | 'ok' | 'unavailable';
+
+type PromptLoadState = 'loading' | 'ok' | 'unavailable';
+
+type RulesLoadState = 'loading' | 'ok' | 'unavailable';
 
 type StatusCardModel = {
   id: string;
@@ -82,6 +88,173 @@ function formatWhen(iso: string): string {
     hour: '2-digit',
     minute: '2-digit',
   });
+}
+
+function formatRuleCondition(
+  field: string,
+  operator: string,
+  value: number,
+): string {
+  const opMap: Record<string, string> = {
+    gte: '≥',
+    lte: '≤',
+    gt: '>',
+    lt: '<',
+    eq: '=',
+  };
+  return `${field} ${opMap[operator] ?? operator} ${value}`;
+}
+
+function PromptRulesPanel({
+  highlight,
+  promptLoad,
+  promptTree,
+  rulesLoad,
+  activeRules,
+  createThreshold,
+}: {
+  highlight?: boolean;
+  promptLoad: PromptLoadState;
+  promptTree: AiPromptTreeNode[] | null;
+  rulesLoad: RulesLoadState;
+  activeRules: AiRuleDefinition[] | null;
+  createThreshold: number | null;
+}) {
+  const loading = promptLoad === 'loading' || rulesLoad === 'loading';
+  const promptFailed = promptLoad === 'unavailable';
+  const rulesFailed = rulesLoad === 'unavailable';
+
+  return (
+    <section
+      id="section-prompt-detail"
+      className={`scroll-mt-4 rounded-2xl border bg-white/80 px-4 py-4 shadow-soft backdrop-blur ${
+        highlight ? 'border-teal-600/30 ring-2 ring-teal-600/40' : 'border-ink-100/80'
+      }`}
+    >
+      <div>
+        <h3 className="text-sm font-medium text-ink-900">Prompt &amp; Rules</h3>
+        <p className="mt-0.5 text-[11px] text-ink-500">
+          GET /ai/prompts · /ai/rules/active · /ai/rules/create-threshold (읽기 전용)
+        </p>
+      </div>
+
+      {loading ? (
+        <p className="mt-4 text-sm text-ink-500">불러오는 중…</p>
+      ) : null}
+
+      {!loading && promptFailed && rulesFailed ? (
+        <p className="mt-4 text-sm text-ink-500">
+          Prompt·Rules를 불러오지 못했습니다. API 키와 서버 연결을 확인하세요.
+        </p>
+      ) : null}
+
+      {!loading && !promptFailed ? (
+        <div className="mt-4">
+          <h4 className="text-xs font-medium uppercase tracking-wide text-ink-500">
+            Prompt Tree
+          </h4>
+          {promptTree && promptTree.length > 0 ? (
+            <div className="mt-2 overflow-x-auto">
+              <table className="min-w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-ink-100 text-[11px] uppercase tracking-wide text-ink-500">
+                    <th className="px-2 py-2 font-medium">key</th>
+                    <th className="px-2 py-2 font-medium">이름</th>
+                    <th className="px-2 py-2 font-medium">활성 버전</th>
+                    <th className="px-2 py-2 font-medium">버전 수</th>
+                    <th className="px-2 py-2 font-medium">source</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {promptTree.map((node) => (
+                    <tr
+                      key={node.key}
+                      className="border-b border-ink-50 align-top last:border-0"
+                    >
+                      <td className="px-2 py-2 font-mono text-[11px] text-ink-900">
+                        {node.key}
+                      </td>
+                      <td className="px-2 py-2 text-ink-700">{node.name}</td>
+                      <td className="px-2 py-2 text-ink-600">
+                        {node.activeVersion != null ? `v${node.activeVersion}` : '—'}
+                      </td>
+                      <td className="px-2 py-2 text-ink-600">
+                        {node.versions.length}
+                      </td>
+                      <td className="px-2 py-2 text-ink-600">{node.source}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="mt-2 text-sm text-ink-500">등록된 prompt가 없습니다.</p>
+          )}
+        </div>
+      ) : null}
+
+      {!loading && !rulesFailed ? (
+        <div className="mt-6">
+          <div className="flex flex-wrap items-center gap-2">
+            <h4 className="text-xs font-medium uppercase tracking-wide text-ink-500">
+              AI Rules
+            </h4>
+            {createThreshold != null ? (
+              <span className="rounded-md bg-teal-50 px-2 py-0.5 text-[11px] font-medium text-teal-800 ring-1 ring-teal-200/80">
+                create_investigation 임계 {createThreshold}
+              </span>
+            ) : null}
+            {activeRules ? (
+              <span className="text-[11px] text-ink-500">
+                활성 {activeRules.length}건
+              </span>
+            ) : null}
+          </div>
+          {activeRules && activeRules.length > 0 ? (
+            <div className="mt-2 overflow-x-auto">
+              <table className="min-w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-ink-100 text-[11px] uppercase tracking-wide text-ink-500">
+                    <th className="px-2 py-2 font-medium">code</th>
+                    <th className="px-2 py-2 font-medium">이름</th>
+                    <th className="px-2 py-2 font-medium">조건</th>
+                    <th className="px-2 py-2 font-medium">action</th>
+                    <th className="px-2 py-2 font-medium">priority</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {activeRules.map((rule) => (
+                    <tr
+                      key={rule.code}
+                      className="border-b border-ink-50 align-top last:border-0"
+                    >
+                      <td className="px-2 py-2 font-mono text-[11px] text-ink-900">
+                        {rule.code}
+                      </td>
+                      <td className="px-2 py-2 text-ink-700">{rule.name}</td>
+                      <td className="px-2 py-2 text-ink-600">
+                        {formatRuleCondition(rule.field, rule.operator, rule.value)}
+                      </td>
+                      <td className="px-2 py-2 text-ink-600">{rule.action}</td>
+                      <td className="px-2 py-2 text-ink-600">
+                        {rule.priority ?? '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="mt-2 text-sm text-ink-500">활성 rule이 없습니다.</p>
+          )}
+        </div>
+      ) : null}
+
+      {!loading && rulesFailed && !promptFailed ? (
+        <p className="mt-4 text-sm text-ink-500">Rules를 불러오지 못했습니다.</p>
+      ) : null}
+    </section>
+  );
 }
 
 function QueueFailedPanel({
@@ -278,10 +451,58 @@ function aiEngineCard(
   };
 }
 
+function promptEngineCard(
+  apiOnline: boolean,
+  promptLoad: PromptLoadState,
+  tree: AiPromptTreeNode[] | null,
+  rulesLoad: RulesLoadState,
+  rules: AiRuleDefinition[] | null,
+  threshold: number | null,
+): StatusCardModel {
+  if (promptLoad === 'ok' && tree) {
+    const activeCount = tree.filter((n) => n.activeVersion != null).length;
+    const rulesHint =
+      rulesLoad === 'ok' && rules && threshold != null
+        ? ` · Rules ${rules.length} · 임계 ${threshold}`
+        : '';
+    return {
+      id: 'prompt',
+      label: 'Prompt',
+      icon: FileText,
+      status:
+        activeCount < tree.length && tree.length > 0 ? 'WARNING' : 'ONLINE',
+      detail: `${tree.length} keys · 활성 ${activeCount}${rulesHint}`,
+    };
+  }
+
+  if (promptLoad === 'unavailable') {
+    return {
+      id: 'prompt',
+      label: 'Prompt',
+      icon: FileText,
+      status: 'WARNING',
+      detail: '조회 실패 (API 키 확인)',
+    };
+  }
+
+  return {
+    id: 'prompt',
+    label: 'Prompt',
+    icon: FileText,
+    status: apiOnline ? 'ONLINE' : 'OFFLINE',
+    detail: apiOnline ? '불러오는 중…' : 'API 연결 필요',
+  };
+}
+
 function buildCards(
   health: HealthPayload | null,
   aiLoad: AiUsageLoadState,
   summary: AiUsageSummary | null,
+  promptLoad: PromptLoadState,
+  promptTree: AiPromptTreeNode[] | null,
+  rulesLoad: RulesLoadState,
+  activeRules: AiRuleDefinition[] | null,
+  createThreshold: number | null,
 ): StatusCardModel[] {
   const info = health?.info;
   const queue = info?.queue ?? null;
@@ -362,13 +583,14 @@ function buildCards(
       detail: '메뉴만 추가 · 스케줄러 UI 준비중',
     },
     aiEngineCard(apiOnline, aiLoad, summary),
-    {
-      id: 'prompt',
-      label: 'Prompt',
-      icon: FileText,
-      status: 'READY',
-      detail: '메뉴만 추가 · Prompt Manager UI 준비중',
-    },
+    promptEngineCard(
+      apiOnline,
+      promptLoad,
+      promptTree,
+      rulesLoad,
+      activeRules,
+      createThreshold,
+    ),
     {
       id: 'redis',
       label: 'Redis',
@@ -449,8 +671,24 @@ export function SystemPage({ health }: { health: HealthPayload | null }) {
   const section = searchParams.get('section') || 'worker';
   const [aiSummary, setAiSummary] = useState<AiUsageSummary | null>(null);
   const [aiLoad, setAiLoad] = useState<AiUsageLoadState>('loading');
+  const [promptTree, setPromptTree] = useState<AiPromptTreeNode[] | null>(null);
+  const [promptLoad, setPromptLoad] = useState<PromptLoadState>('loading');
+  const [activeRules, setActiveRules] = useState<AiRuleDefinition[] | null>(
+    null,
+  );
+  const [rulesLoad, setRulesLoad] = useState<RulesLoadState>('loading');
+  const [createThreshold, setCreateThreshold] = useState<number | null>(null);
   const [queueRefreshKey, setQueueRefreshKey] = useState(0);
-  const cards = buildCards(health, aiLoad, aiSummary);
+  const cards = buildCards(
+    health,
+    aiLoad,
+    aiSummary,
+    promptLoad,
+    promptTree,
+    rulesLoad,
+    activeRules,
+    createThreshold,
+  );
   const failedCount = health?.info?.queue?.failed ?? 0;
 
   useEffect(() => {
@@ -467,6 +705,43 @@ export function SystemPage({ health }: { health: HealthPayload | null }) {
           setAiSummary(null);
           setAiLoad('unavailable');
         }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const [treeRes, rulesRes, thresholdRes] = await Promise.allSettled([
+        api.aiPromptsTree(),
+        api.aiRulesActive(),
+        api.aiRulesCreateThreshold(),
+      ]);
+      if (cancelled) return;
+
+      if (treeRes.status === 'fulfilled') {
+        setPromptTree(treeRes.value);
+        setPromptLoad('ok');
+      } else {
+        setPromptTree(null);
+        setPromptLoad('unavailable');
+      }
+
+      if (rulesRes.status === 'fulfilled') {
+        setActiveRules(rulesRes.value);
+        setRulesLoad('ok');
+      } else {
+        setActiveRules(null);
+        setRulesLoad('unavailable');
+      }
+
+      if (thresholdRes.status === 'fulfilled') {
+        setCreateThreshold(thresholdRes.value.threshold);
+      } else {
+        setCreateThreshold(null);
       }
     })();
     return () => {
@@ -505,6 +780,15 @@ export function SystemPage({ health }: { health: HealthPayload | null }) {
         highlight={section === 'queue'}
         failedCount={failedCount + queueRefreshKey}
         onCountsChange={() => setQueueRefreshKey((n) => n + 1)}
+      />
+
+      <PromptRulesPanel
+        highlight={section === 'prompt'}
+        promptLoad={promptLoad}
+        promptTree={promptTree}
+        rulesLoad={rulesLoad}
+        activeRules={activeRules}
+        createThreshold={createThreshold}
       />
     </div>
   );

@@ -151,3 +151,32 @@ export interface FailedQueueJobsResponse {
 export interface RetryFailedQueueJobResponse {
   jobId: string;
 }
+
+/** GET /ai/prompts — Prompt Tree 노드 */
+export interface AiPromptTreeNode {
+  key: string;
+  name: string;
+  activeVersion: number | null;
+  versions: number[];
+  description: string | null;
+  source: 'file' | 'db' | 'mixed';
+}
+
+/** GET /ai/rules/active */
+export interface AiRuleDefinition {
+  code: string;
+  name: string;
+  description?: string | null;
+  enabled?: boolean;
+  priority?: number;
+  field: string;
+  operator: string;
+  value: number;
+  action: string;
+  message?: string | null;
+}
+
+/** GET /ai/rules/create-threshold */
+export interface AiCreateThreshold {
+  threshold: number;
+}
