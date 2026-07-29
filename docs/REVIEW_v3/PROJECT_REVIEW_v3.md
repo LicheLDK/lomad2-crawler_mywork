@@ -49,7 +49,7 @@ v2의 모든 항목이 v3에서 어디로 이어지는지 명시한다.
 | —          | UI 메뉴 IA 리팩토링          | **신규 반영**                       | §5.6          |
 | v2 §5 P1-1 | 다중 키워드 집계 취약        | **해소** (TASK A-1~A-6, 2026-07-29) | §7.1 P1-A     |
 | v2 §5 P1-2 | AI provider 구현 상태 제한적 | **미해소, 근거 보강**               | §7.1 P1-B     |
-| v2 §5 P1-3 | 운영 관측성 최소 수준        | **미해소, 유효**                    | §7.1 P1-C     |
+| v2 §5 P1-3 | 운영 관측성 최소 수준        | **해소** (TASK B-1~B-8, 2026-07-29) | §7.1 P1-C     |
 | v2 §5 P1-4 | 크롤링 정책 미고정           | **미해소, 유효**                    | §7.1 P1-D     |
 | v2 §5 P2-1 | 프론트 번들 크기             | **악화 (784→794KB)**                | §7.1 P2-A     |
 | v2 §5 P2-2 | 문서 인코딩/중복             | **미해소, 대상 확대**               | §7.1 P2-B     |
@@ -335,7 +335,11 @@ v2의 지적이 정확했고, v3에서 코드 근거를 확정했다. 6개 프�
 5. **(신규)** `ai.enabled` 판정을 선택된 provider 기준으로 바꾼다.
 6. **(신규)** 재시도 대상을 timeout·5xx·rate limit으로 제한한다.
 
-#### P1-C. 운영 관측성이 아직 최소 수준이다 (v2 §5 P1-3)
+#### P1-C. 운영 관측성이 아직 최소 수준이다 (v2 §5 P1-3) — **해소**
+
+> **해소일**: 2026-07-29 · **작업**: `docs/REVIEW_v3/작업지시서_v3_B.md` TASK B-1 ~ B-8
+
+##### 해소 전 문제 (기록)
 
 부족한 지표 (v2와 동일):
 
@@ -352,13 +356,40 @@ v3에서 추가로 확인한 사실:
 - `stats.byStatus`는 백엔드가 제공하고(`src/modules/stats/stats.service.ts:113-116`) 프론트 타입에도 있으나(`web/src/types.ts:43`) **어느 화면에서도 소비하지 않는다.** Analytics 확장 시 즉시 쓸 수 있는 데이터가 방치되어 있다.
 - UI 개선으로 System·Analytics 메뉴 골격이 생겼으므로, 지표를 추가하면 표시할 자리는 이미 준비된 상태다.
 
-권장 보완:
+##### 해소 내용
 
-1. `crawler_site_metrics` 또는 시계열 로그 집계를 추가한다.
-2. crawl 결과에 `errorCode`, `adapterVersion`, `responseStatus` 원인 필드를 남긴다.
-3. `/api/stats`에 운영용 핵심 지표를 추가하고 `byStatus`부터 화면에 연결한다.
-4. DLQ를 실제로 구현하거나 상수를 제거한다.
-5. PM2/Docker 로그를 보지 않아도 장애 원인이 보이도록 dashboard를 보강한다.
+| TASK | 내용 |
+| ---- | ---- |
+| B-1 | Analytics에 SearchHistory·Investigation `byStatus` 분포 연결 (라벨 분리) |
+| B-2 | System AI Engine·Analytics AI 섹션을 `/ai/usage/*` 실데이터로 연결 |
+| B-3 | `crawl_site_attempts` 테이블 + 크롤 시도 기록 (`errorCode`, `adapterVersion`, `responseStatus`) |
+| B-4 | `siteMetrics` (24h 성공률·latency) → `/api/stats` + Analytics Sites |
+| B-5 | DLQ 실구현, failed job 조회·재시도 API + System Queue UI |
+| B-6 | `POST /search-jobs/:id/callback/resend` + Rental/System callback 실패 노출 |
+| B-7 | System Prompt·Rules 카드를 GET `/ai/prompts`·`/ai/rules` 실데이터로 연결 |
+| B-8 | 메트릭 retention 정리 — `crawl_site_attempts` 90일, `ai_usage_logs` 180일 (`RetentionCleanupService` + `npm run retention:cleanup`) |
+
+##### B4 retention 정책 (확정)
+
+| 데이터 | 보존 | 구현 |
+| ------ | ---- | ---- |
+| `crawl_site_attempts` | 90일 | `METRICS_RETENTION_CRAWL_ATTEMPTS_DAYS` + 배치 삭제 |
+| `ai_usage_logs` | 180일 | `METRICS_RETENTION_AI_USAGE_DAYS` + 배치 삭제 |
+| Bull failed / DLQ | 14일 또는 최근 500건 | `QUEUE_FAILED_RETENTION_DAYS` / `QUEUE_FAILED_MAX_COUNT` (B-5) |
+
+##### 후속 (범위 밖·미구현)
+
+- 이미지 다운로드 실패 사유별 집계
+- callback 실패율 시계열 집계 (resend API는 B-6에서 제공)
+- System UI에 마지막 retention cleanup 시각 표시 (선택 항목)
+
+권장 보완 (v2 원문 — 위 TASK로 대부분 해소, 아래는 후속 참고):
+
+1. ~~`crawler_site_metrics` 또는 시계열 로그 집계를 추가한다.~~ → B-3/B-4
+2. ~~crawl 결과에 `errorCode`, `adapterVersion`, `responseStatus` 원인 필드를 남긴다.~~ → B-3
+3. ~~`/api/stats`에 운영용 핵심 지표를 추가하고 `byStatus`부터 화면에 연결한다.~~ → B-1/B-4
+4. ~~DLQ를 실제로 구현하거나 상수를 제거한다.~~ → B-5
+5. PM2/Docker 로그를 보지 않아도 장애 원인이 보이도록 dashboard를 보강한다. → B-1~B-7 (이미지 실패 집계는 후속)
 
 #### P1-D. 크롤링 정책과 법적/운영 기준이 코드 밖에 고정되어 있지 않다 (v2 §5 P1-4)
 
@@ -809,14 +840,15 @@ v2의 A~E를 유지하되, v3 신규 발견 중 즉시 처리 항목을 **우선
 5. Investigation 생성 경로 단일화 후 회귀 테스트 고정 (N1) — 우선순위 0에서 처리
 6. 매칭 입력 필드가 실제로 채워지는지 테스트로 고정 (N2, N5) — 우선순위 0에서 처리
 
-### 우선순위 B: 운영 관측성 (v2 §6 B 유지)
+### 우선순위 B: 운영 관측성 (v2 §6 B 유지) — P1-C **해소** (TASK B-1~B-8, 2026-07-29)
 
-1. 사이트별 crawl 성공/실패/latency 집계 (P1-C)
-2. Adapter parse 실패 원인 기록 (`errorCode`, `adapterVersion`, `responseStatus`) (P1-C)
-3. queue retry/exhausted job dashboard 노출 — DLQ 실구현 또는 상수 제거 (P1-C, N7)
-4. AI usage/cost 화면과 System 화면 연결 강화 — 백엔드 API 이미 존재 (P1-C, U6)
-5. callback 실패 재시도 및 재전송 API 추가 (P1-C)
-6. `stats.byStatus`를 Analytics에 연결 (U7, U11)
+1. ~~사이트별 crawl 성공/실패/latency 집계 (P1-C)~~ ✅ (B-3, B-4)
+2. ~~Adapter parse 실패 원인 기록 (`errorCode`, `adapterVersion`, `responseStatus`) (P1-C)~~ ✅ (B-3)
+3. ~~queue retry/exhausted job dashboard 노출 — DLQ 실구현 또는 상수 제거 (P1-C, N7)~~ ✅ (B-5)
+4. ~~AI usage/cost 화면과 System 화면 연결 강화 — 백엔드 API 이미 존재 (P1-C, U6)~~ ✅ (B-2, B-7)
+5. ~~callback 실패 재시도 및 재전송 API 추가 (P1-C)~~ ✅ (B-6, 수동 resend)
+6. ~~`stats.byStatus`를 Analytics에 연결 (U7, U11)~~ ✅ (B-1)
+7. ~~메트릭 테이블 retention 정리 (`crawl_site_attempts` 90일, `ai_usage_logs` 180일)~~ ✅ (B-8, `RetentionCleanupService` + `npm run retention:cleanup`)
 
 ### 우선순위 C: AI 정확도 (v2 §6 C + N6 반영)
 
@@ -1024,4 +1056,4 @@ v3에서 새로 확인한 가장 중요한 사실은 **AI 판단 엔진이 구�
 2. **개발 기반 복구** (N3) — 이후 모든 작업의 안전망
 3. ~~**Search Job 1:N 구조 정리** (P1-A)~~ ✅ 해소 (2026-07-29, TASK A-1~A-6)
 4. ~~**Investigation 실 API 전환** (U9)~~ ✅ 해소 (2026-07-29, TASK D-1~D-7)
-5. **운영 관측성·AI provider 명확화** (P1-B, P1-C) — 화면 골격이 준비되어 있어 비용이 낮아진 상태
+5. ~~**운영 관측성·AI provider 명확화** (P1-B, P1-C)~~ — P1-C ✅ 해소 (2026-07-29, TASK B-1~B-8). P1-B(AI provider)는 우선순위 C 잔여.

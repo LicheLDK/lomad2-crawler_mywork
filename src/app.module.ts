@@ -19,6 +19,7 @@ import { RentalModule } from './api/rental.module';
 import { SearchJobModule } from './modules/search-job/search-job.module';
 import { InvestigationModule } from './modules/investigation/investigation.module';
 import { AiModule } from './ai/ai.module';
+import { RetentionModule } from './modules/retention/retention.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 
 @Module({
@@ -50,6 +51,7 @@ import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
     SearchJobModule,
     InvestigationModule,
     AiModule,
+    RetentionModule,
   ],
   providers: [
     SiteSeedService,

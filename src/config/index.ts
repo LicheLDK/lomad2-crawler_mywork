@@ -7,6 +7,7 @@ import rentalConfig from './rental.config';
 import investigationConfig from './investigation.config';
 import imageConfig from './image.config';
 import searchJobConfig from './search-job.config';
+import retentionConfig from './retention.config';
 import aiConfig from '@/ai/ai.config';
 
 export const configs = [
@@ -19,5 +20,6 @@ export const configs = [
   investigationConfig,
   imageConfig,
   searchJobConfig,
+  retentionConfig,
   aiConfig,
 ];
