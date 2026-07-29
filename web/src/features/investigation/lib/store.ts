@@ -153,14 +153,16 @@ function normalizeCase(row: InvestigationCase): InvestigationCase {
 
   const withEvidence = { ...base, evidence };
 
+  // ?? const ? ??? ?? ???? undefined ? ??? ??? ????
+  const rawTimeline = row.timeline;
   const timelineNeedsRebuild =
-    row.timeline == null ||
-    row.timeline.length === 0 ||
-    row.timeline.some((e) => !e.kind);
+    rawTimeline == null ||
+    rawTimeline.length === 0 ||
+    rawTimeline.some((e) => !e.kind);
 
   const timeline = timelineNeedsRebuild
     ? buildDefaultTimeline(withEvidence)
-    : row.timeline.map(repairTimelineEvent);
+    : rawTimeline.map(repairTimelineEvent);
 
   return {
     ...withEvidence,
