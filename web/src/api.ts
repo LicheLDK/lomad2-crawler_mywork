@@ -191,6 +191,20 @@ export const api = {
     request<import('./features/investigation/types').InvestigationConfigResponse>(
       '/investigations/config',
     ),
+  getInvestigationStats: () =>
+    request<import('./features/investigation/types').InvestigationStatsResponse>(
+      '/investigations/stats',
+    ),
+  createInvestigation: (body: {
+    resultId: string;
+    searchHistoryId?: string;
+    searchJobId?: string;
+    orderNo?: string;
+  }) =>
+    request<import('./features/investigation/types').ServerInvestigationDto>(
+      '/investigations',
+      { method: 'POST', body: JSON.stringify(body) },
+    ),
   patchInvestigationStatus: (
     id: string,
     body: { status: import('./features/investigation/types').InvestigationStatus },

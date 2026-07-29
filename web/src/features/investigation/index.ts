@@ -30,7 +30,6 @@ export {
   INVESTIGATION_CHANGED,
   LOCAL_WRITES_DISABLED,
   loadInvestigationCases,
-  createInvestigationFromResult,
   changeInvestigationStatus,
   updateInvestigationAssignment,
   applyFinalDecision,
@@ -40,8 +39,9 @@ export {
   deleteInvestigationEvidence,
 } from './lib/store';
 
-export { WRITE_API_PENDING_HINT } from './types';
 export { mapServerCase } from './lib/mapServerCase';
+export type { InvestigationStatsResponse } from './types';
+
 
 export {
   isInvestigationLocked,

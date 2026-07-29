@@ -1,4 +1,3 @@
-import type { SearchResult } from '../../../types';
 import type {
   InvestigationCase,
   InvestigationNote,
@@ -9,8 +8,8 @@ import type {
 import { WRITE_API_PENDING_HINT } from '../types';
 
 /**
- * ?? localStorage ? (D-7?? ??).
- * D-5: ???/??/?? ??? ???? ??.
+ * ??? localStorage ? (D-7?? ??).
+ * D-5/D-6: ???·??·?? ??? ?? API? ??.
  */
 export const INVESTIGATION_STORAGE_KEYS = {
   cases: 'crawler.dashboard.investigation.cases',
@@ -18,10 +17,10 @@ export const INVESTIGATION_STORAGE_KEYS = {
   seeded: 'crawler.dashboard.investigation.seeded.v6',
 } as const;
 
-/** @deprecated D-5?? ?? ???. ??? ?? ?? */
+/** @deprecated D-5 ?? ??? ?? ?? */
 export const INVESTIGATION_CHANGED = 'investigation:changed';
 
-/** D-5: localStorage ??? ?? ??? ?? */
+/** D-5: localStorage ??? ?? ?? ??? */
 export const LOCAL_WRITES_DISABLED = true;
 
 /**
@@ -72,7 +71,7 @@ export function updateInvestigationAssignment(
   return rejectWrite();
 }
 
-/** Evidence CRUD? D3? ?? ??? */
+/** Evidence CRUD? D3?? ?? ? */
 export function deleteInvestigationEvidence(
   _caseId: string,
   _evidenceId: string,
@@ -106,16 +105,7 @@ export function deleteInvestigationNote(
   return rejectWrite();
 }
 
-/**
- * D-1: localStorage ?? ??. D-6?? POST /api/investigations ? ??.
- */
-export function createInvestigationFromResult(
-  _row: SearchResult,
-): InvestigationCase | null {
-  return rejectWrite();
-}
-
-/** D-6 ?? ?? ??? (D-5 Drawer ??? ??) */
+/** @deprecated D-6 ?? ?? ? D-7?? ?? ?? */
 export function writePendingMessage(): string {
   return WRITE_API_PENDING_HINT;
 }

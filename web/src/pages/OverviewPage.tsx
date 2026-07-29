@@ -1,6 +1,9 @@
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowUpRight, Activity, Cpu } from 'lucide-react';
+import { api } from '../api';
 import type { AiUsageToday, HealthPayload, StatsOverview } from '../types';
+import type { InvestigationStatsResponse } from '../features/investigation';
 import { RecentSearches } from '../components/RecentSearches';
 import { DashboardSummary } from '../components/DashboardSummary';
 import { CaseSummaryCard } from '../features/investigation';
@@ -37,6 +40,25 @@ export function OverviewPage({
           ? `처리 중 ${workerActive}`
           : '대기 중';
 
+  const [invStats, setInvStats] = useState<InvestigationStatsResponse | null>(
+    null,
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await api.getInvestigationStats();
+        if (!cancelled) setInvStats(res);
+      } catch {
+        if (!cancelled) setInvStats(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   return (
     <div className="flex h-full min-h-0 flex-col gap-4 animate-fadeUp">
       <header className="shrink-0">
@@ -58,9 +80,9 @@ export function OverviewPage({
           to="/search"
         />
         <OverviewTile
-          label="오늘 수집 결과"
-          value={stats?.last24h.results ?? '—'}
-          hint="Stats API · 최근 24시간 결과 기준"
+          label="오늘 Investigation"
+          value={invStats?.last24h ?? '—'}
+          hint="최근 24시간 생성 케이스"
           to="/investigation"
         />
         <OverviewTile

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api } from '../api';
+import { useInvestigation } from '../features/investigation';
 import { siteLabel } from '../lib/format';
 import {
   subscribeSearchJobProgress,
@@ -119,6 +120,7 @@ export function RentalPage({
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [live, setLive] = useState<JobLive | null>(null);
+  const { openCase } = useInvestigation();
 
   function setTab(next: 'contracts' | 'auto' | 'investigations') {
     setSearchParams({ tab: next }, { replace: true });
@@ -400,28 +402,11 @@ export function RentalPage({
               ) : (
                 <ul className="space-y-2">
                   {investigations.map((inv) => (
-                    <li
+                    <InvestigationRow
                       key={inv.id}
-                      className="rounded-xl border border-ink-100 bg-sand-50/50 px-3 py-2.5"
-                    >
-                      <div className="flex flex-wrap items-start justify-between gap-2">
-                        <div>
-                          <p className="font-mono text-xs text-ink-500">
-                            {inv.caseNo}
-                          </p>
-                          <p className="text-sm text-ink-900">
-                            {inv.listingTitle || inv.productName}
-                          </p>
-                        </div>
-                        <span className="rounded-md bg-teal-50 px-1.5 py-0.5 text-[11px] tabular-nums text-teal-800">
-                          AI {inv.aiScorePercent}%
-                        </span>
-                      </div>
-                      <p className="mt-1 text-[11px] text-ink-400">
-                        {siteLabel(inv.siteCode)} · {inv.status} ·{' '}
-                        {formatWhen(inv.createdAt)}
-                      </p>
-                    </li>
+                      inv={inv}
+                      onOpen={() => openCase(inv.id)}
+                    />
                   ))}
                 </ul>
               )}
@@ -634,28 +619,11 @@ export function RentalPage({
                   ) : (
                     <ul className="mt-2 space-y-2">
                       {investigations.map((inv) => (
-                        <li
+                        <InvestigationRow
                           key={inv.id}
-                          className="rounded-xl border border-ink-100 bg-sand-50/50 px-3 py-2.5"
-                        >
-                          <div className="flex flex-wrap items-start justify-between gap-2">
-                            <div>
-                              <p className="font-mono text-xs text-ink-500">
-                                {inv.caseNo}
-                              </p>
-                              <p className="text-sm text-ink-900">
-                                {inv.listingTitle || inv.productName}
-                              </p>
-                            </div>
-                            <span className="rounded-md bg-teal-50 px-1.5 py-0.5 text-[11px] tabular-nums text-teal-800">
-                              AI {inv.aiScorePercent}%
-                            </span>
-                          </div>
-                          <p className="mt-1 text-[11px] text-ink-400">
-                            {siteLabel(inv.siteCode)} · {inv.status} ·{' '}
-                            {formatWhen(inv.createdAt)}
-                          </p>
-                        </li>
+                          inv={inv}
+                          onOpen={() => openCase(inv.id)}
+                        />
                       ))}
                     </ul>
                   )}
@@ -666,6 +634,39 @@ export function RentalPage({
         </section>
       </div>
     </div>
+  );
+}
+
+function InvestigationRow({
+  inv,
+  onOpen,
+}: {
+  inv: RentalInvestigation;
+  onOpen: () => void;
+}) {
+  return (
+    <li>
+      <button
+        type="button"
+        onClick={onOpen}
+        className="w-full rounded-xl border border-ink-100 bg-sand-50/50 px-3 py-2.5 text-left transition hover:border-teal-600/40 hover:bg-teal-50/40"
+      >
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <p className="font-mono text-xs text-ink-500">{inv.caseNo}</p>
+            <p className="text-sm text-ink-900">
+              {inv.listingTitle || inv.productName}
+            </p>
+          </div>
+          <span className="rounded-md bg-teal-50 px-1.5 py-0.5 text-[11px] tabular-nums text-teal-800">
+            AI {inv.aiScorePercent}%
+          </span>
+        </div>
+        <p className="mt-1 text-[11px] text-ink-400">
+          {siteLabel(inv.siteCode)} · {inv.status} · {formatWhen(inv.createdAt)}
+        </p>
+      </button>
+    </li>
   );
 }
 

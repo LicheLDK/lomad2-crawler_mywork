@@ -99,7 +99,10 @@ export function ResultsPanel({
   function startInvestigation(row: SearchResult, e?: React.SyntheticEvent) {
     e?.preventDefault();
     e?.stopPropagation();
-    startInvestigationFromResult(row);
+    void startInvestigationFromResult(row, {
+      searchHistoryId: row.searchHistoryId ?? detail?.searchId,
+      searchJobId: detail?.jobId,
+    });
   }
 
   const results = detail?.results || [];

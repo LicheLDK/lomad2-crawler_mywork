@@ -202,5 +202,11 @@ export type InvestigationConfigResponse = {
   autoCreateEnabled: boolean;
 };
 
-/** D-6 수동 생성 등 아직 미연결 UI 안내 */
+/** GET /api/investigations/stats */
+export type InvestigationStatsResponse = {
+  last24h: number;
+  byStatus: Record<InvestigationStatus, number>;
+};
+
+/** @deprecated D-5/D-6 이후 미사용 — D-7에서 제거 예정 */
 export const WRITE_API_PENDING_HINT = '쓰기 API 연결 전';
