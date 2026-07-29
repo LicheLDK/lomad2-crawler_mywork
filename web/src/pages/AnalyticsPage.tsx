@@ -1,4 +1,4 @@
-import { useEffect, useMemo, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   Bar,
@@ -11,8 +11,13 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
+import { api } from '../api';
 import type { StatsOverview } from '../types';
-import { siteLabel } from '../lib/format';
+import {
+  INVESTIGATION_STATUSES,
+  type InvestigationStatsResponse,
+} from '../features/investigation';
+import { siteLabel, statusLabel } from '../lib/format';
 
 const TEAL = '#0f766e';
 const INK = '#141c2e';
@@ -47,6 +52,11 @@ function formatDay(day: string) {
 export function AnalyticsPage({ stats }: { stats: StatsOverview | null }) {
   const [searchParams] = useSearchParams();
   const section = searchParams.get('section') || 'search';
+  const [invStats, setInvStats] = useState<InvestigationStatsResponse | null>(
+    null,
+  );
+  const [invStatsLoading, setInvStatsLoading] = useState(true);
+  const [invStatsError, setInvStatsError] = useState(false);
 
   useEffect(() => {
     const id =
@@ -61,6 +71,29 @@ export function AnalyticsPage({ stats }: { stats: StatsOverview | null }) {
     el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, [section]);
 
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await api.getInvestigationStats();
+        if (!cancelled) {
+          setInvStats(res);
+          setInvStatsError(false);
+        }
+      } catch {
+        if (!cancelled) {
+          setInvStats(null);
+          setInvStatsError(true);
+        }
+      } finally {
+        if (!cancelled) setInvStatsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const siteData = useMemo(
     () =>
       (stats?.bySite ?? []).map((row) => ({
@@ -68,6 +101,38 @@ export function AnalyticsPage({ stats }: { stats: StatsOverview | null }) {
         count: row.count,
       })),
     [stats],
+  );
+
+  /** SearchHistory 상태 분포 — GET /stats → byStatus */
+  const searchStatusData = useMemo(
+    () =>
+      (stats?.byStatus ?? []).map((row) => ({
+        name: statusLabel(row.status),
+        status: row.status,
+        count: row.count,
+      })),
+    [stats],
+  );
+
+  const searchStatusTotal = useMemo(
+    () => searchStatusData.reduce((sum, row) => sum + row.count, 0),
+    [searchStatusData],
+  );
+
+  /** Investigation Case 상태 분포 — GET /investigations/stats → byStatus */
+  const invStatusData = useMemo(
+    () =>
+      INVESTIGATION_STATUSES.map((status) => ({
+        name: status,
+        status,
+        count: invStats?.byStatus?.[status] ?? 0,
+      })),
+    [invStats],
+  );
+
+  const invStatusTotal = useMemo(
+    () => invStatusData.reduce((sum, row) => sum + row.count, 0),
+    [invStatusData],
   );
 
   const keywordData = useMemo(
@@ -115,7 +180,7 @@ export function AnalyticsPage({ stats }: { stats: StatsOverview | null }) {
 
       <div
         id="section-search"
-        className={`scroll-mt-4 rounded-2xl ${highlight('search')}`}
+        className={`scroll-mt-4 space-y-5 rounded-2xl ${highlight('search')}`}
       >
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <MetricCard label="검색 수" value={stats.totals.searches} />
@@ -131,6 +196,19 @@ export function AnalyticsPage({ stats }: { stats: StatsOverview | null }) {
             hint="최근 24시간"
           />
         </div>
+
+        <Panel eyebrow="Search · byStatus" title="검색 상태 분포">
+          <p className="mb-3 text-sm text-ink-500">
+            SearchHistory 상태 · GET /stats → byStatus
+          </p>
+          {searchStatusTotal === 0 ? (
+            <p className="text-sm text-ink-500">
+              표시할 검색 상태 데이터가 없습니다.
+            </p>
+          ) : (
+            <StatusBarChart data={searchStatusData} barFill={TEAL} />
+          )}
+        </Panel>
       </div>
 
       <div className="grid gap-5 lg:grid-cols-2">
@@ -234,19 +312,29 @@ export function AnalyticsPage({ stats }: { stats: StatsOverview | null }) {
         id="section-investigation"
         className={`scroll-mt-4 rounded-2xl ${highlight('investigation')}`}
       >
-        <Panel eyebrow="Investigation" title="Investigation 통계">
-          <div className="grid gap-3 sm:grid-cols-3">
-            <MetricCard label="검색 결과(전체)" value={stats.totals.results} />
-            <MetricCard label="오늘 결과" value={stats.last24h.results} />
-            <MetricCard
-              label="Queue waiting"
-              value={stats.queue?.waiting ?? 0}
-              hint="조사 파이프라인 부하 참고"
-            />
-          </div>
-          <p className="mt-3 text-sm text-ink-500">
-            Case 상세 집계는 Investigation 메뉴에서 확인합니다.
+        <Panel eyebrow="Investigation · byStatus" title="Investigation 상태 분포">
+          <p className="mb-3 text-sm text-ink-500">
+            Investigation Case 상태 · GET /investigations/stats → byStatus
+            {invStats != null ? (
+              <>
+                {' '}
+                · 최근 24시간 생성 {invStats.last24h.toLocaleString()}건
+              </>
+            ) : null}
           </p>
+          {invStatsLoading ? (
+            <p className="text-sm text-ink-500">Investigation 통계를 불러오는 중…</p>
+          ) : invStatsError ? (
+            <p className="text-sm text-ink-500">
+              Investigation 상태 분포를 불러오지 못했습니다.
+            </p>
+          ) : invStatusTotal === 0 ? (
+            <p className="text-sm text-ink-500">
+              표시할 Investigation 케이스 상태 데이터가 없습니다.
+            </p>
+          ) : (
+            <StatusBarChart data={invStatusData} barFill={INK} />
+          )}
         </Panel>
       </div>
 
@@ -326,6 +414,46 @@ function MetricCard({
         {value}
       </div>
       {hint ? <div className="mt-0.5 text-[11px] text-ink-400">{hint}</div> : null}
+    </div>
+  );
+}
+
+function StatusBarChart({
+  data,
+  barFill,
+}: {
+  data: { name: string; count: number }[];
+  barFill: string;
+}) {
+  return (
+    <div className="h-64">
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+          <CartesianGrid stroke={SAND} strokeDasharray="3 3" vertical={false} />
+          <XAxis
+            dataKey="name"
+            tick={{ fill: MUTED, fontSize: 12 }}
+            axisLine={false}
+            tickLine={false}
+          />
+          <YAxis
+            allowDecimals={false}
+            tick={{ fill: MUTED, fontSize: 12 }}
+            axisLine={false}
+            tickLine={false}
+            width={36}
+          />
+          <Tooltip
+            cursor={{ fill: 'rgba(15, 118, 110, 0.06)' }}
+            contentStyle={{
+              borderRadius: 12,
+              border: '1px solid #e2e8f0',
+              fontSize: 13,
+            }}
+          />
+          <Bar dataKey="count" name="건수" fill={barFill} radius={[8, 8, 0, 0]} />
+        </BarChart>
+      </ResponsiveContainer>
     </div>
   );
 }
