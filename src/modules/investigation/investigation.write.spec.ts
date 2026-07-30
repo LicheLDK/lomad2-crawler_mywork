@@ -41,8 +41,9 @@ describe('InvestigationService write APIs', () => {
       finalDecisionNote: null,
       decidedAt: null,
       dueDate: null,
-      createdAt: new Date('2026-07-29T00:00:00.000Z'),
-      updatedAt: new Date('2026-07-29T00:00:00.000Z'),
+      // Relative dates keep getStats last24h assertions stable over time.
+      createdAt: new Date(),
+      updatedAt: new Date(),
       ...overrides,
     } as InvestigationCaseEntity;
   }
@@ -378,14 +379,16 @@ describe('InvestigationService write APIs', () => {
 
   describe('getStats', () => {
     it('returns last24h and byStatus counts', async () => {
+      const recent = new Date(Date.now() - 60 * 60 * 1000);
       const { service } = createHarness({
         cases: [
-          seedCase({ id: 'a', status: 'Open' }),
+          seedCase({ id: 'a', status: 'Open', createdAt: recent }),
           seedCase({
             id: 'b',
             status: 'Completed',
             resultId: 'result-2',
             caseNo: 'CASE-20260729-000002',
+            createdAt: recent,
           }),
           seedCase({
             id: 'c',
