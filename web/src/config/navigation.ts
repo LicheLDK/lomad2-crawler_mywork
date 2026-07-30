@@ -10,7 +10,7 @@ import {
 
 /**
  * Sidebar / Route 단일 소스 (확장 시 여기만 추가)
- * Google Search Console · Linear · Stripe 스타일: 섹션 + 명확한 IA
+ * 메뉴 라벨은 한글 통일. id/path는 라우팅용 영문 유지.
  */
 export type NavId =
   | 'dashboard'
@@ -54,17 +54,17 @@ export const APP_VERSION = '1.0.0';
 export const NAV_SECTIONS: NavSection[] = [
   {
     id: 'workspace',
-    label: 'Workspace',
+    label: '작업 공간',
     items: [
       {
         id: 'dashboard',
-        label: 'Dashboard',
+        label: '대시보드',
         icon: LayoutDashboard,
         path: '/',
       },
       {
         id: 'search',
-        label: 'Search',
+        label: '검색',
         icon: Search,
         path: '/search',
         badge: 'secondary',
@@ -89,50 +89,50 @@ export const NAV_SECTIONS: NavSection[] = [
       },
       {
         id: 'rental',
-        label: 'Rental',
+        label: '주문 연동',
         icon: Package,
         path: '/rental',
         children: [
           {
             id: 'contracts',
-            label: '계약 목록',
+            label: '주문 작업',
             path: '/rental?tab=contracts',
             isDefault: true,
           },
           { id: 'auto', label: '자동 검색', path: '/rental?tab=auto' },
           {
             id: 'inv-history',
-            label: '조사 이력',
+            label: '연결 조사',
             path: '/rental?tab=investigations',
           },
         ],
       },
       {
         id: 'investigation',
-        label: 'Investigation',
+        label: '조사',
         icon: ShieldAlert,
         path: '/investigation',
         badge: 'teal',
         children: [
           {
             id: 'open',
-            label: 'Open',
+            label: '대기',
             path: '/investigation?status=Open',
             isDefault: true,
           },
           {
             id: 'reviewing',
-            label: 'Reviewing',
+            label: '검토중',
             path: '/investigation?status=Review',
           },
           {
             id: 'completed',
-            label: 'Completed',
+            label: '완료',
             path: '/investigation?status=Completed',
           },
           {
             id: 'archived',
-            label: 'Archived',
+            label: '보관',
             path: '/investigation?status=Archived',
           },
         ],
@@ -141,11 +141,11 @@ export const NAV_SECTIONS: NavSection[] = [
   },
   {
     id: 'insights',
-    label: 'Insights',
+    label: '인사이트',
     items: [
       {
         id: 'analytics',
-        label: 'Analytics',
+        label: '분석',
         icon: BarChart3,
         path: '/analytics',
         children: [
@@ -167,7 +167,7 @@ export const NAV_SECTIONS: NavSection[] = [
           },
           {
             id: 'inv-stats',
-            label: 'Investigation 통계',
+            label: '조사 통계',
             path: '/analytics?section=investigation',
           },
         ],
@@ -176,31 +176,31 @@ export const NAV_SECTIONS: NavSection[] = [
   },
   {
     id: 'platform',
-    label: 'Platform',
+    label: '플랫폼',
     items: [
       {
         id: 'system',
-        label: 'System',
+        label: '시스템',
         icon: Settings,
         path: '/system',
         badge: 'destructive',
         children: [
           {
             id: 'worker',
-            label: 'Worker',
+            label: '워커',
             path: '/system?section=worker',
             isDefault: true,
           },
-          { id: 'queue', label: 'Queue', path: '/system?section=queue' },
+          { id: 'queue', label: '큐', path: '/system?section=queue' },
           { id: 'api', label: 'API', path: '/system?section=api' },
-          { id: 'proxy', label: 'Proxy', path: '/system?section=proxy' },
+          { id: 'proxy', label: '프록시', path: '/system?section=proxy' },
           {
             id: 'scheduler',
-            label: 'Scheduler',
+            label: '스케줄러',
             path: '/system?section=scheduler',
           },
-          { id: 'ai-engine', label: 'AI Engine', path: '/system?section=ai' },
-          { id: 'prompt', label: 'Prompt', path: '/system?section=prompt' },
+          { id: 'ai-engine', label: 'AI 엔진', path: '/system?section=ai' },
+          { id: 'prompt', label: '프롬프트', path: '/system?section=prompt' },
         ],
       },
     ],
@@ -251,4 +251,3 @@ export function childPathActive(
   }
   return true;
 }
-

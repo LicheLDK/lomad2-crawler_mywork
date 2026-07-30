@@ -337,25 +337,25 @@ export function RentalPage({
     <div className="flex h-full min-h-0 flex-col gap-4 animate-fadeUp">
       <section className="shrink-0 rounded-2xl border border-ink-100/80 bg-white/75 p-4 shadow-soft backdrop-blur sm:p-5">
         <p className="text-xs uppercase tracking-[0.16em] text-ink-500">
-          Rental · 계약 관리
+          주문 연동 · 읽기 전용
         </p>
         <h2 className="font-display text-xl text-ink-900">
           {tab === 'contracts'
-            ? '계약 목록'
+            ? '주문 작업'
             : tab === 'auto'
               ? '자동 검색'
-              : '조사 이력'}
+              : '연결 조사'}
         </h2>
         <p className="mt-1 text-sm text-ink-500">
-          BackOffice가 Master입니다. 주문정보는 Rental API로 조회하고, 여기서는
-          Job Status를 실시간으로 표시합니다.
+          백오피스가 요청한 검색 Job의 진행·결과·콜백을 추적합니다. 계약 수정은
+          로마드 백오피스에서 합니다.
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
           {(
             [
-              ['contracts', '계약 목록'],
+              ['contracts', '주문 작업'],
               ['auto', '자동 검색'],
-              ['investigations', '조사 이력'],
+              ['investigations', '연결 조사'],
             ] as const
           ).map(([id, label]) => (
             <button
@@ -382,7 +382,7 @@ export function RentalPage({
                 ? '자동 검색 Job'
                 : tab === 'investigations'
                   ? 'Job 선택'
-                  : '최근 Search Job'}
+                  : '최근 주문 작업'}
             </h3>
             <p className="text-xs text-ink-500">{jobs.length}건</p>
           </div>
@@ -398,6 +398,8 @@ export function RentalPage({
             ) : jobs.length === 0 ? (
               <p className="px-2 py-8 text-center text-sm text-ink-500">
                 아직 Search Job이 없습니다.
+                <br />
+                백오피스에서 주문 검색을 요청하면 여기에 나타납니다.
               </p>
             ) : (
               <ul className="space-y-1">
@@ -469,9 +471,15 @@ export function RentalPage({
         <section className="min-h-0 overflow-y-auto overscroll-contain rounded-2xl border border-ink-100/80 bg-white/75 p-4 shadow-soft backdrop-blur sm:p-5">
           {tab === 'investigations' ? (
             <div className="space-y-4">
-              <h3 className="text-sm font-medium text-ink-900">
-                조사 이력 (Job 연결)
-              </h3>
+              <div>
+                <h3 className="text-sm font-medium text-ink-900">
+                  연결 조사
+                </h3>
+                <p className="mt-1 text-[11px] text-ink-400">
+                  이 Job에 자동 생성된 Investigation만 표시합니다. 조사·판정은
+                  Investigation 메뉴에서 진행하세요.
+                </p>
+              </div>
               {!selectedJobId ? (
                 <p className="py-8 text-sm text-ink-500">
                   왼쪽에서 Job을 선택하세요.
@@ -479,6 +487,8 @@ export function RentalPage({
               ) : investigations.length === 0 ? (
                 <p className="text-sm text-ink-500">
                   연결된 Investigation이 없습니다.
+                  <br />
+                  검색 완료 후 임계값 이상 매물만 자동 생성됩니다.
                 </p>
               ) : (
                 <ul className="space-y-2">
@@ -596,7 +606,7 @@ export function RentalPage({
               {tab === 'contracts' && (
                 <div>
                   <p className="text-xs uppercase tracking-[0.14em] text-ink-500">
-                    주문정보 (Rental API)
+                    주문 요약 · 백오피스 조회 · 읽기 전용
                   </p>
                   {orderError && !order ? (
                     <p className="mt-2 text-sm text-amber-800">
@@ -640,9 +650,9 @@ export function RentalPage({
                     키워드별 결과
                   </h4>
                   <p className="mt-1 text-[11px] text-ink-400">
-                    키워드별 건수는 해당 키워드가 찾은 수입니다. Job 합계(
-                    {jobResultCount}건)는 고유 매물 기준이라 합계와 다를 수
-                    있습니다.
+                    이 Job이 생성한 키워드별 검색 결과입니다. 클릭하면 Search
+                    이력으로 이동합니다. Job 합계({jobResultCount}건)는 고유
+                    매물 기준이라 키워드 합계와 다를 수 있습니다.
                   </p>
                   {keywordHistories.length === 0 ? (
                     <p className="mt-2 text-sm text-ink-500">
@@ -730,7 +740,7 @@ export function RentalPage({
               {tab === 'contracts' && (
                 <div>
                   <h4 className="text-sm font-medium text-ink-900">
-                    Investigation (Job 연결)
+                    연결 조사
                   </h4>
                   {investigations.length === 0 ? (
                     <p className="mt-2 text-sm text-ink-500">

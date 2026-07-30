@@ -246,8 +246,8 @@ export function AppSidebar({
         {!collapsed ? (
           <div className="min-w-0 flex-1">
             <div className="font-display text-xl leading-none">Lomad</div>
-            <div className="mt-1 text-[11px] uppercase tracking-[0.18em] text-ink-500">
-              Crawler
+            <div className="mt-1 text-[11px] tracking-[0.08em] text-ink-500">
+              크롤러
             </div>
           </div>
         ) : null}
@@ -267,12 +267,12 @@ export function AppSidebar({
         className={`min-h-0 flex-1 space-y-5 overflow-y-auto text-sm ${
           collapsed ? 'mt-8' : 'mt-10'
         }`}
-        aria-label="Primary"
+        aria-label="주요 메뉴"
       >
         {NAV_SECTIONS.map((section) => (
           <div key={section.id}>
             {!collapsed && section.label ? (
-              <p className="mb-1.5 px-3 text-[10px] font-medium uppercase tracking-[0.16em] text-ink-300">
+              <p className="mb-1.5 px-3 text-[10px] font-medium tracking-[0.08em] text-ink-300">
                 {section.label}
               </p>
             ) : null}
