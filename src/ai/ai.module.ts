@@ -23,11 +23,13 @@ import { GeminiVisionProvider } from './providers/gemini.vision.provider';
 import { OpenAiProvider } from './providers/openai.provider';
 import { OpenAiVisionProvider } from './providers/openai.vision.provider';
 import { StorageModule } from '@/storage/storage.module';
+import { MatchingLocalImageService } from './local-image/matching-local-image.service';
 
 /**
  * AI Engine Module
  * - Prompt: PromptManagerService (templates/ + Version + History)
  * - Cost / Rules / Vision / Providers
+ * - Local image gate (LooksSame + OpenCV) before Vision
  * - 진입점: AiService
  */
 @Module({
@@ -43,6 +45,7 @@ import { StorageModule } from '@/storage/storage.module';
   ],
   controllers: [AiUsageController, AiRulesController, AiPromptsController, AiHealthController],
   providers: [
+    MatchingLocalImageService,
     OpenAiProvider,
     AnthropicProvider,
     GeminiProvider,

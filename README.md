@@ -87,6 +87,8 @@ npx playwright install chromium
 | `DB_HOST` / `REDIS_HOST` / `ELASTIC_NODE` | 인프라 주소 | `127.0.0.1` 권장 |
 | `CRAWL_CONCURRENCY` | Worker 병렬도 | `5` |
 
+전체 환경변수 설명: [`docs/환경변수.md`](docs/환경변수.md) · 사용 안내: [`docs/사용법.md`](docs/사용법.md)
+
 > Windows에서 `localhost`가 `::1`(IPv6)로 해석되며 `ENOBUFS`가 날 수 있습니다.  
 > DB / Redis / Elastic / 브라우저 접속은 모두 **`127.0.0.1`** 을 사용하세요.
 

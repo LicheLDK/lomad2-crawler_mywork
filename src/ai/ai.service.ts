@@ -47,6 +47,8 @@ import {
   applyVisionToMatching,
   shouldRunVisionCompare,
 } from './matching-vision.util';
+import { applyLocalToMatching } from './local-image/apply-local-to-matching';
+import { MatchingLocalImageService } from './local-image/matching-local-image.service';
 
 /** Matching 항목 가중치 — 최종 AI Score 산출 (ai.service 로직) */
 const MATCH_WEIGHTS: Record<keyof AiMatchingItemScores, number> = {
@@ -79,6 +81,7 @@ export class AiService {
     private readonly costService: AiCostService,
     private readonly promptManager: PromptManagerService,
     private readonly imageStorage: ImageStorageService,
+    private readonly matchingLocalImage: MatchingLocalImageService,
   ) {}
 
   getActiveProvider(): AiProviderName {
@@ -322,7 +325,6 @@ export class AiService {
       this.config.get<boolean>('ai.visionBeforeMatch') !== false;
     if (
       visionBeforeMatch &&
-      this.canCompareImages() &&
       shouldRunVisionCompare({
         matchingScore,
         scores,
@@ -331,40 +333,77 @@ export class AiService {
       })
     ) {
       try {
-        const productHint = [
-          input.rental.brand,
-          input.rental.productName,
-          input.rental.modelName,
-        ]
-          .filter(Boolean)
-          .join(' ');
-        const vision = await this.compareImages({
-          rentalImageUrl: String(input.rental.imageUrl),
-          listingImageUrl: String(input.listing.imageUrl),
-          productHint: productHint || null,
-          metadata: {
-            listingId: input.listing.id,
-            pipeline: 'matching',
-          },
-        });
-        const adjusted = applyVisionToMatching({
-          scores,
-          matchingScore,
-          aiScore,
-          reason,
-          visionSimilarity: vision.imageSimilarity,
-          visionReason: vision.reason,
-        });
-        scores = adjusted.scores;
-        matchingScore = adjusted.matchingScore;
-        aiScore = adjusted.aiScore;
-        reason = adjusted.reason;
-        this.logger.debug(
-          `AI match vision applied listingId=${input.listing.id ?? '-'} vision=${vision.imageSimilarity} matching=${matchingScore} ai=${aiScore}`,
-        );
+        const rentalImageUrl = String(input.rental.imageUrl);
+        const listingImageUrl = String(input.listing.imageUrl);
+
+        // LooksSame + OpenCV 로컬 게이트 → threshold 미통과면 Vision 스킵 (비용 절감)
+        let allowVision = true;
+        if (this.matchingLocalImage.isEnabled()) {
+          const localGate = await this.matchingLocalImage.evaluate({
+            rentalImageUrl,
+            listingImageUrl,
+          });
+          if (localGate && !localGate.shouldCallVision) {
+            allowVision = false;
+            const adjusted = applyLocalToMatching({
+              scores,
+              matchingScore,
+              aiScore,
+              reason,
+              localSimilarity: localGate.localSimilarity,
+              localReason: localGate.reason,
+            });
+            scores = adjusted.scores;
+            matchingScore = adjusted.matchingScore;
+            aiScore = adjusted.aiScore;
+            reason = adjusted.reason;
+            this.logger.debug(
+              `AI match local gate blocked Vision listingId=${input.listing.id ?? '-'}` +
+                ` local=${localGate.localSimilarity} matching=${matchingScore} ai=${aiScore}`,
+            );
+          } else if (localGate?.shouldCallVision) {
+            this.logger.debug(
+              `AI match local gate passed listingId=${input.listing.id ?? '-'} — ${localGate.reason}`,
+            );
+          }
+        }
+
+        if (allowVision && this.canCompareImages()) {
+          const productHint = [
+            input.rental.brand,
+            input.rental.productName,
+            input.rental.modelName,
+          ]
+            .filter(Boolean)
+            .join(' ');
+          const vision = await this.compareImages({
+            rentalImageUrl,
+            listingImageUrl,
+            productHint: productHint || null,
+            metadata: {
+              listingId: input.listing.id,
+              pipeline: 'matching',
+            },
+          });
+          const adjusted = applyVisionToMatching({
+            scores,
+            matchingScore,
+            aiScore,
+            reason,
+            visionSimilarity: vision.imageSimilarity,
+            visionReason: vision.reason,
+          });
+          scores = adjusted.scores;
+          matchingScore = adjusted.matchingScore;
+          aiScore = adjusted.aiScore;
+          reason = adjusted.reason;
+          this.logger.debug(
+            `AI match vision applied listingId=${input.listing.id ?? '-'} vision=${vision.imageSimilarity} matching=${matchingScore} ai=${aiScore}`,
+          );
+        }
       } catch (err) {
         this.logger.warn(
-          `Vision compare skipped (matching continues): ${
+          `Vision/local image compare skipped (matching continues): ${
             err instanceof Error ? err.message : String(err)
           }`,
         );

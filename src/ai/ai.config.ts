@@ -69,9 +69,79 @@ export default registerAs('ai', () => {
     /**
      * Matching 후 Vision 이미지 비교로 image 점수 보정 (기본 true).
      * canCompareImages() 이고 양쪽에 이미지 URL이 있으며 텍스트 점수가 높을 때만 호출.
+     * localImageGate=true 이면 LooksSame/OpenCV threshold 통과 후보만 Vision 호출.
      */
     visionBeforeMatch:
       (process.env.AI_VISION_BEFORE_MATCH || 'true').toLowerCase() === 'true',
+    /**
+     * Vision 직전 로컬 게이트 (기본 true, 비용 0).
+     * Color → pHash → LooksSame + SSIM + OpenCV. threshold 미통과 시 Vision 스킵.
+     */
+    localImageGate:
+      (process.env.AI_LOCAL_IMAGE_GATE || 'true').toLowerCase() !== 'false',
+    /** 색 히스토그램 이하면 Vision block */
+    localColorRejectThreshold: parseInt(
+      process.env.AI_LOCAL_COLOR_REJECT_THRESHOLD || '35',
+      10,
+    ),
+    /** pHash 이하면 Vision block */
+    localPHashRejectThreshold: parseInt(
+      process.env.AI_LOCAL_PHASH_REJECT_THRESHOLD || '30',
+      10,
+    ),
+    /** pHash 이상이면 거의 동일 → Vision 스킵(고점수) */
+    localPHashPassThreshold: parseInt(
+      process.env.AI_LOCAL_PHASH_PASS_THRESHOLD || '90',
+      10,
+    ),
+    /** SSIM ≥ 이면 Vision 후보 (LooksSame 보완) */
+    localSsimThreshold: parseInt(
+      process.env.AI_LOCAL_SSIM_THRESHOLD || '75',
+      10,
+    ),
+    /** SSIM ≥ 이면 거의 동일 → Vision 스킵(고점수) */
+    localSsimPassThreshold: parseInt(
+      process.env.AI_LOCAL_SSIM_PASS_THRESHOLD || '92',
+      10,
+    ),
+    localLooksSameThreshold: parseInt(
+      process.env.AI_LOCAL_LOOKS_SAME_THRESHOLD || '70',
+      10,
+    ),
+    localOpenCvThreshold: parseInt(
+      process.env.AI_LOCAL_OPENCV_THRESHOLD || '60',
+      10,
+    ),
+    localLooksSameStrict:
+      (process.env.AI_LOCAL_LOOKS_SAME_STRICT || 'false').toLowerCase() ===
+      'true',
+    localLooksSameTolerance: parseFloat(
+      process.env.AI_LOCAL_LOOKS_SAME_TOLERANCE || '2.5',
+    ),
+    localLooksSameIgnoreAntialiasing:
+      (process.env.AI_LOCAL_LOOKS_SAME_IGNORE_ANTIALIASING || 'true').toLowerCase() !==
+      'false',
+    localOpenCvOrbNfeatures: parseInt(
+      process.env.AI_LOCAL_OPENCV_ORB_NFEATURES || '500',
+      10,
+    ),
+    localOpenCvOrbMatchRatio: parseFloat(
+      process.env.AI_LOCAL_OPENCV_ORB_MATCH_RATIO || '0.75',
+    ),
+    localPreprocessMaxWidth: parseInt(
+      process.env.AI_LOCAL_PREPROCESS_MAX_WIDTH || '512',
+      10,
+    ),
+    localPreprocessMaxHeight: parseInt(
+      process.env.AI_LOCAL_PREPROCESS_MAX_HEIGHT || '512',
+      10,
+    ),
+    localPreprocessBackground: (
+      process.env.AI_LOCAL_PREPROCESS_BACKGROUND || 'ffffff'
+    ).replace(/^#/, ''),
+    localPreprocessNormalize:
+      (process.env.AI_LOCAL_PREPROCESS_NORMALIZE || 'true').toLowerCase() !==
+      'false',
   };
 });
 

@@ -570,6 +570,7 @@ function barFill(score: number) {
   const pct = toPct(score);
   if (pct >= 90) return 'bg-emerald-600';
   if (pct >= 70) return 'bg-orange-500';
+  if (pct >= 40) return 'bg-ink-500';
   return 'bg-ink-400';
 }
 

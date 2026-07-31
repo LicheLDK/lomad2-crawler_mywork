@@ -63,6 +63,22 @@ export class ImageStorageService {
     }
   }
 
+  /**
+   * 로컬 이미지 비교(LooksSame/OpenCV)용 — 안전 다운로드 후 Buffer.
+   * 실패 시 null.
+   */
+  async fetchBuffer(url: string): Promise<Buffer | null> {
+    try {
+      const { buffer } = await this.fetchImageSafely(url);
+      await this.assertDecodableImage(buffer);
+      return buffer;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.warn(`Image buffer error: ${message} url=${url}`);
+      return null;
+    }
+  }
+
   private async fetchImageSafely(
     startUrl: string,
   ): Promise<{ buffer: Buffer; contentType: string | null }> {
