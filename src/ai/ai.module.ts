@@ -22,6 +22,7 @@ import { GeminiProvider } from './providers/gemini.provider';
 import { GeminiVisionProvider } from './providers/gemini.vision.provider';
 import { OpenAiProvider } from './providers/openai.provider';
 import { OpenAiVisionProvider } from './providers/openai.vision.provider';
+import { StorageModule } from '@/storage/storage.module';
 
 /**
  * AI Engine Module
@@ -32,6 +33,7 @@ import { OpenAiVisionProvider } from './providers/openai.vision.provider';
 @Module({
   imports: [
     ConfigModule,
+    StorageModule,
     TypeOrmModule.forFeature([
       AiUsageLog,
       AiRule,

@@ -46,6 +46,23 @@ export class ImageStorageService {
     }
   }
 
+  /**
+   * Vision 등 외부 API용 — 이미지를 안전하게 받아 data URL로 변환.
+   * 실패 시 null (호출측에서 원본 URL fallback 가능).
+   */
+  async fetchAsDataUrl(url: string): Promise<string | null> {
+    try {
+      const { buffer, contentType } = await this.fetchImageSafely(url);
+      await this.assertDecodableImage(buffer);
+      const mime = this.toMime(contentType);
+      return `data:${mime};base64,${buffer.toString('base64')}`;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.warn(`Image data-url error: ${message} url=${url}`);
+      return null;
+    }
+  }
+
   private async fetchImageSafely(
     startUrl: string,
   ): Promise<{ buffer: Buffer; contentType: string | null }> {
@@ -151,6 +168,12 @@ export class ImageStorageService {
     if (!meta.format || !SHARP_FORMATS.has(meta.format)) {
       throw new Error(`Not a supported image format: ${meta.format ?? 'unknown'}`);
     }
+  }
+
+  private toMime(contentType: string | null): string {
+    if (contentType === 'image/jpg') return 'image/jpeg';
+    if (contentType && IMAGE_CONTENT_TYPES.has(contentType)) return contentType;
+    return 'image/jpeg';
   }
 
   private guessExt(url: string, contentType: string | null): string {

@@ -1,5 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { ImageStorageService } from '@/storage/image-storage.service';
 import { AI_PROVIDER, type AiProvider } from './ai.provider';
 import {
   AI_VISION_PROVIDER,
@@ -42,6 +43,10 @@ import { buildOcrPromptVars } from './prompt/builders/ocr.builder';
 import { buildRecommendationPromptVars } from './prompt/builders/recommendation.builder';
 import { buildReportPromptVars } from './prompt/builders/report.builder';
 import { renderReportHtml } from './template/report.template';
+import {
+  applyVisionToMatching,
+  shouldRunVisionCompare,
+} from './matching-vision.util';
 
 /** Matching 항목 가중치 — 최종 AI Score 산출 (ai.service 로직) */
 const MATCH_WEIGHTS: Record<keyof AiMatchingItemScores, number> = {
@@ -73,6 +78,7 @@ export class AiService {
     private readonly config: ConfigService,
     private readonly costService: AiCostService,
     private readonly promptManager: PromptManagerService,
+    private readonly imageStorage: ImageStorageService,
   ) {}
 
   getActiveProvider(): AiProviderName {
@@ -300,17 +306,70 @@ export class AiService {
     });
 
     const parsed = parseMatchingJson(response.content);
-    const scores = normalizeItemScores(parsed.scores);
-    const matchingScore = clampScore(
+    let scores = normalizeItemScores(parsed.scores);
+    let matchingScore = clampScore(
       parsed.matchingScore ?? weightedAverage(scores),
     );
-    const aiScore = clampScore(
+    let aiScore = clampScore(
       parsed.aiScore ?? computeAiScoreFromItems(scores, matchingScore),
     );
-    const reason =
+    let reason =
       typeof parsed.reason === 'string' && parsed.reason.trim()
         ? parsed.reason.trim()
         : 'AI Matching 평가 완료';
+
+    const visionBeforeMatch =
+      this.config.get<boolean>('ai.visionBeforeMatch') !== false;
+    if (
+      visionBeforeMatch &&
+      this.canCompareImages() &&
+      shouldRunVisionCompare({
+        matchingScore,
+        scores,
+        rentalImageUrl: input.rental.imageUrl,
+        listingImageUrl: input.listing.imageUrl,
+      })
+    ) {
+      try {
+        const productHint = [
+          input.rental.brand,
+          input.rental.productName,
+          input.rental.modelName,
+        ]
+          .filter(Boolean)
+          .join(' ');
+        const vision = await this.compareImages({
+          rentalImageUrl: String(input.rental.imageUrl),
+          listingImageUrl: String(input.listing.imageUrl),
+          productHint: productHint || null,
+          metadata: {
+            listingId: input.listing.id,
+            pipeline: 'matching',
+          },
+        });
+        const adjusted = applyVisionToMatching({
+          scores,
+          matchingScore,
+          aiScore,
+          reason,
+          visionSimilarity: vision.imageSimilarity,
+          visionReason: vision.reason,
+        });
+        scores = adjusted.scores;
+        matchingScore = adjusted.matchingScore;
+        aiScore = adjusted.aiScore;
+        reason = adjusted.reason;
+        this.logger.debug(
+          `AI match vision applied listingId=${input.listing.id ?? '-'} vision=${vision.imageSimilarity} matching=${matchingScore} ai=${aiScore}`,
+        );
+      } catch (err) {
+        this.logger.warn(
+          `Vision compare skipped (matching continues): ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      }
+    }
 
     this.logger.debug(
       `AI match listingId=${input.listing.id ?? '-'} matching=${matchingScore} ai=${aiScore}`,
@@ -543,7 +602,7 @@ export class AiService {
   /**
    * Image Analysis (Vision)
    * 렌탈 이미지 vs 검색 결과 이미지 → Image Similarity 0~100
-   * STEP AI-06: Vision Provider Interface 위임 (실제 API 미구현)
+   * CDN 차단 대비: 가능하면 서버에서 받아 data URL로 전달
    */
   async compareImages(
     input: AiImageCompareRequest,
@@ -566,6 +625,8 @@ export class AiService {
         'INVALID_REQUEST',
       );
     }
+
+    const resolved = await this.resolveVisionImageUrls(input);
 
     const prompt = this.promptManager.render(
       'image',
@@ -596,7 +657,7 @@ export class AiService {
     while (attempt <= maxRetries) {
       const started = Date.now();
       try {
-        const result = await this.visionProvider.compareImages(input, {
+        const result = await this.visionProvider.compareImages(resolved, {
           systemPrompt: prompt.system,
           userPrompt: prompt.user,
         });
@@ -654,6 +715,21 @@ export class AiService {
     throw lastError instanceof Error
       ? lastError
       : new AiEngineError('AI Vision compare failed', 'PROVIDER_ERROR');
+  }
+
+  /** Vision용 이미지 URL → 가능하면 data URL (CDN 핫링크 차단 회피) */
+  private async resolveVisionImageUrls(
+    input: AiImageCompareRequest,
+  ): Promise<AiImageCompareRequest> {
+    const [rentalData, listingData] = await Promise.all([
+      this.imageStorage.fetchAsDataUrl(input.rentalImageUrl),
+      this.imageStorage.fetchAsDataUrl(input.listingImageUrl),
+    ]);
+    return {
+      ...input,
+      rentalImageUrl: rentalData || input.rentalImageUrl,
+      listingImageUrl: listingData || input.listingImageUrl,
+    };
   }
 
   /** OCR Analysis 사용 가능 */

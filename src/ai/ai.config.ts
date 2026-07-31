@@ -66,6 +66,12 @@ export default registerAs('ai', () => {
     rules: parseAiRulesJson(process.env.AI_RULES_JSON),
     /** Matching 전 OCR 분석 결과를 prompt에 포함 */
     ocrBeforeMatch: (process.env.AI_OCR_BEFORE_MATCH || 'false').toLowerCase() === 'true',
+    /**
+     * Matching 후 Vision 이미지 비교로 image 점수 보정 (기본 true).
+     * canCompareImages() 이고 양쪽에 이미지 URL이 있으며 텍스트 점수가 높을 때만 호출.
+     */
+    visionBeforeMatch:
+      (process.env.AI_VISION_BEFORE_MATCH || 'true').toLowerCase() === 'true',
   };
 });
 
