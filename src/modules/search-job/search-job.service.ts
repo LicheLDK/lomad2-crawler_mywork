@@ -53,13 +53,48 @@ export class SearchJobService {
 
   /**
    * Job 생성 후 즉시 jobId 반환.
-   * 주문정보는 Rental API Client 로만 조회한다 (BackOffice Master).
+   * - 운영: orderNo → Rental API 조회
+   * - 연동 전: body.order 스냅샷이 있으면 Rental API 없이 검색
    */
   async create(dto: CreateSearchJobDto) {
-    const orderNo = dto.orderNo.trim();
+    const orderNo = (
+      dto.orderNo?.trim() ||
+      dto.order?.order_id?.trim() ||
+      ''
+    ).trim();
+    if (!orderNo) {
+      throw new BadRequestException(
+        'orderNo 또는 order.order_id 가 필요합니다.',
+      );
+    }
+
     let searchInput;
+    let via: 'manual-order' | 'rental-api' = 'rental-api';
     try {
-      searchInput = await this.rentalService.resolveSearchInput(orderNo);
+      if (dto.order?.product_name?.trim()) {
+        searchInput = this.rentalService.resolveSearchInputFromRaw(
+          {
+            order_id: orderNo,
+            easyrental_contract_num: dto.order.easyrental_contract_num,
+            username: dto.order.username,
+            product_code: dto.order.product_code,
+            product_detail_code: dto.order.product_detail_code,
+            product_name: dto.order.product_name,
+            brand_name: dto.order.brand_name,
+            model_name: dto.order.model_name,
+            option_name: dto.order.option_name,
+            color: dto.order.color,
+            category_name: dto.order.category_name,
+            sourcing_name: dto.order.sourcing_name,
+            thumbnail_img_url: dto.order.thumbnail_img_url,
+            count: dto.order.count,
+          },
+          orderNo,
+        );
+        via = 'manual-order';
+      } else {
+        searchInput = await this.rentalService.resolveSearchInput(orderNo);
+      }
     } catch (error) {
       const message =
         error instanceof Error ? error.message : String(error);
@@ -107,7 +142,7 @@ export class SearchJobService {
     );
 
     this.logger.log(
-      `SearchJob created id=${job.id} orderNo=${job.orderNo} keywords=${keywords.length} (via Rental API)`,
+      `SearchJob created id=${job.id} orderNo=${job.orderNo} keywords=${keywords.length} (via ${via})`,
     );
 
     await this.progressSync.publishFromJob(job, 'Search job created');
@@ -244,6 +279,22 @@ export class SearchJobService {
       this.logger.warn(
         `Rental order fetch failed jobId=${jobId} orderNo=${job.orderNo}: ${orderError}`,
       );
+      // 수동 order 스냅샷으로 생성한 Job 등 — Job에 저장된 검색 스냅샷으로 표시
+      if (job.productName) {
+        order = {
+          orderNo: job.orderNo,
+          contractNo: job.contractNo,
+          customerName: null,
+          productNo: job.productNo ?? job.orderNo,
+          productName: job.productName,
+          brand: job.brand,
+          modelName: job.modelName,
+          option: job.option,
+          color: job.color,
+          imageUrl: job.referenceImageUrl,
+        };
+        orderError = null;
+      }
     }
 
     const searchHistories = job.searchHistoryId

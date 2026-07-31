@@ -34,7 +34,7 @@ export class SearchJobController {
   @Post()
   @ApiOperation({
     summary:
-      'Search Job 생성 (orderNo only → Rental API 조회 → 즉시 jobId, 검색 비동기)',
+      'Search Job 생성 (orderNo → Rental API, 또는 body.order 수동 스냅샷으로 즉시 검색)',
   })
   @ApiResponse({ status: 201, description: 'Job 생성됨' })
   create(@Body() dto: CreateSearchJobDto) {

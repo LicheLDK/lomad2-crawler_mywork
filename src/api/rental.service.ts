@@ -100,9 +100,25 @@ export class RentalService {
    */
   async resolveSearchInput(orderId: string): Promise<RentalSearchInput> {
     const order = await this.getOrder(orderId);
+    return this.toSearchInput(order);
+  }
+
+  /**
+   * 백오피스 주문 API Raw JSON → Search Job 입력.
+   * 연동 전 수동 테스트(Postman body.order)용.
+   */
+  resolveSearchInputFromRaw(
+    raw: RentalOrderRaw,
+    fallbackOrderId?: string,
+  ): RentalSearchInput {
+    const order = this.normalizeOrder(raw, fallbackOrderId);
+    return this.toSearchInput(order);
+  }
+
+  private toSearchInput(order: RentalOrder): RentalSearchInput {
     if (!order.productName?.trim()) {
       throw new RentalApiError(
-        `주문 ${orderId} 에 상품명이 없습니다.`,
+        `주문 ${order.orderId} 에 상품명이 없습니다.`,
         422,
       );
     }

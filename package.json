@@ -28,6 +28,7 @@
     "migration:baseline:mark": "ts-node -r tsconfig-paths/register src/database/scripts/mark-baseline-migrated.ts",
     "postinstall": "playwright install chromium || true",
     "backup": "powershell -ExecutionPolicy Bypass -File scripts/backup-source.ps1",
+    "copy:test": "powershell -ExecutionPolicy Bypass -File scripts/copy-for-test.ps1",
     "reset:dev-data": "powershell -ExecutionPolicy Bypass -File scripts/reset-dev-data.ps1",
     "infra:up": "docker compose up -d postgres redis elastic",
     "infra:up:light": "docker compose up -d postgres redis",

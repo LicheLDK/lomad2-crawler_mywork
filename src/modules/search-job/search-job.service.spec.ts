@@ -54,6 +54,7 @@ describe('SearchJobService', () => {
     };
     const rentalService = {
       resolveSearchInput: jest.fn(),
+      resolveSearchInputFromRaw: jest.fn(),
       notifySearchCompleted: jest.fn(),
       getOrder: jest.fn(),
       toPublicOrder: jest.fn(),
@@ -215,6 +216,60 @@ describe('SearchJobService', () => {
         productName: 'Galaxy S24 Ultra',
         referenceImageUrl: 'https://example.com/ref.jpg',
         status: SearchJobStatus.PENDING,
+      }),
+    );
+  });
+
+  it('creates SearchJob from manual order snapshot without Rental API', async () => {
+    const { service, jobRepo, rentalService, keywordGenerator } =
+      createService();
+    const requestedAt = new Date('2026-07-29T00:00:00.000Z');
+    jobRepo.create.mockImplementation((entity: object) => entity);
+    jobRepo.save.mockImplementation(async (entity: object) => ({
+      id: 'job-manual',
+      requestedAt,
+      ...entity,
+    }));
+    rentalService.resolveSearchInputFromRaw.mockReturnValue({
+      orderId: '30008788',
+      keyword: '에어론 풀 체어 그라파이트',
+      externalProductId: 'P-10022',
+      referenceImageUrl: 'https://example.com/aeron.jpg',
+      brand: 'Herman Miller',
+      modelName: null,
+      option: null,
+      color: 'Graphite',
+      productName: '에어론 풀 체어 그라파이트',
+    });
+    keywordGenerator.generateAsync.mockResolvedValue([
+      'Herman Miller 에어론',
+      '에어론 풀 체어 그라파이트',
+    ]);
+
+    await service.create({
+      orderNo: '30008788',
+      useCache: false,
+      order: {
+        order_id: '30008788',
+        product_name: '에어론 풀 체어 그라파이트',
+        brand_name: 'Herman Miller',
+        color: 'Graphite',
+        product_code: 'P-10022',
+        thumbnail_img_url: 'https://example.com/aeron.jpg',
+      },
+    });
+
+    expect(rentalService.resolveSearchInput).not.toHaveBeenCalled();
+    expect(rentalService.resolveSearchInputFromRaw).toHaveBeenCalled();
+    expect(jobRepo.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orderNo: '30008788',
+        brand: 'Herman Miller',
+        productName: '에어론 풀 체어 그라파이트',
+        color: 'Graphite',
+        productNo: 'P-10022',
+        referenceImageUrl: 'https://example.com/aeron.jpg',
+        useCache: false,
       }),
     );
   });

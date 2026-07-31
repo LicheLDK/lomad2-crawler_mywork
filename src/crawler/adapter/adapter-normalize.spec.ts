@@ -1,6 +1,9 @@
 import { ConfigService } from '@nestjs/config';
 import { BungaeAdapter } from './bungae.adapter';
-import { JoonggonaraAdapter } from './joonggonara.adapter';
+import {
+  isJunkJoongnaTitle,
+  JoonggonaraAdapter,
+} from './joonggonara.adapter';
 import { KarrotAdapter } from './karrot.adapter';
 
 function mockConfig(): ConfigService {
@@ -65,6 +68,32 @@ describe('adapter normalize()', () => {
       seller: 'seller1',
       region: '경기',
     });
+  });
+
+  it('중고나라: isJunkJoongnaTitle 판별', () => {
+    expect(isJunkJoongnaTitle('판매하기')).toBe(true);
+    expect(isJunkJoongnaTitle('구매하기')).toBe(true);
+    expect(isJunkJoongnaTitle('에어론 풀 체어')).toBe(false);
+  });
+
+  it('중고나라: UI 문구(판매하기) 제목은 제외', async () => {
+    const adapter = new JoonggonaraAdapter(mockConfig());
+    const listings = await adapter.normalize([
+      {
+        title: '판매하기',
+        priceText: '10000원',
+        href: 'https://web.joongna.com/product/1',
+        image: 'https://img.example/a.jpg',
+      },
+      {
+        title: '에어론 풀 체어 그라파이트',
+        priceText: '800000원',
+        href: 'https://web.joongna.com/product/2',
+        image: 'https://img.example/b.jpg',
+      },
+    ]);
+    expect(listings).toHaveLength(1);
+    expect(listings[0].title).toBe('에어론 풀 체어 그라파이트');
   });
 
   it('당근: JSON-LD 형태 mapItem', async () => {
