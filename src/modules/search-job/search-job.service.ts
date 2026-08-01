@@ -784,10 +784,14 @@ export class SearchJobService {
         )
       : [];
 
+    let rentalPrice: string | number | null = null;
+
     if (job && this.aiService.canMatch() && results.length > 0) {
       try {
+        const rental = await this.buildMatchingRentalSnapshot(job);
+        rentalPrice = rental.price ?? null;
         const matches = await this.aiService.matchSearchResults({
-          rental: this.toMatchingRentalSnapshot(job),
+          rental,
           listings: results.map((r) => ({
             id: r.id,
             title: r.title,
@@ -818,6 +822,7 @@ export class SearchJobService {
             imageSimilarity: m.scores.image / 100,
           };
         });
+        await this.persistMatchingScores(searchHistoryId, results);
         this.logger.log(
           `SearchJob ${searchJobId}: AI Matching applied to ${matches.length} listing(s) history=${searchHistoryId}`,
         );
@@ -833,13 +838,53 @@ export class SearchJobService {
     const result = await this.investigationService.autoCreateFromSearch({
       searchHistoryId,
       searchJobId,
+      rentalPrice,
       results,
     });
     if (result.created.length) {
       this.logger.log(
-        `SearchJob ${searchJobId}: auto-created ${result.created.length} investigation(s) history=${searchHistoryId}`,
+        `SearchJob ${searchJobId}: auto-created ${result.created.length} investigation(s) history=${searchHistoryId} watchlisted=${result.watchlisted}`,
       );
     }
+  }
+
+  /** Matching 점수를 search_history_results 에 영속화 */
+  private async persistMatchingScores(
+    searchHistoryId: string,
+    results: Array<{
+      id: string;
+      matchingScore?: number | null;
+      aiScore?: number | null;
+      matchingReason?: string | null;
+      matchingScores?: Record<string, number> | null;
+      titleSimilarity?: number | null;
+      imageSimilarity?: number | null;
+    }>,
+  ): Promise<void> {
+    const withScores = results.filter(
+      (r) => r.matchingScore != null || r.aiScore != null,
+    );
+    if (withScores.length === 0) return;
+
+    await Promise.all(
+      withScores.map((r) =>
+        this.historyResultRepo.update(
+          { searchHistoryId, resultId: r.id },
+          {
+            matchingScore: r.matchingScore ?? null,
+            aiScore: r.aiScore ?? null,
+            matchingReason: r.matchingReason ?? null,
+            matchingScores: r.matchingScores ?? null,
+            ...(r.titleSimilarity != null
+              ? { titleSimilarity: r.titleSimilarity }
+              : {}),
+            ...(r.imageSimilarity != null
+              ? { imageSimilarity: r.imageSimilarity }
+              : {}),
+          },
+        ),
+      ),
+    );
   }
 
   /** 검색 완료 → BackOffice Callback (COMPLETED / PARTIAL). 자동 재시도 없음. */
@@ -1021,14 +1066,48 @@ export class SearchJobService {
     };
   }
 
-  private toMatchingRentalSnapshot(job: SearchJob) {
+  private async buildMatchingRentalSnapshot(job: SearchJob) {
+    let price: string | number | null = null;
+    let color = job.color ?? null;
+    let option = job.option ?? null;
+    let brand = job.brand ?? null;
+    let productName = job.productName ?? null;
+    let modelName = job.modelName ?? null;
+    let imageUrl = job.referenceImageUrl ?? null;
+
+    if (job.orderNo?.trim()) {
+      try {
+        const order = await this.rentalService.getOrder(job.orderNo.trim());
+        brand = brand || order.brandName || null;
+        productName = productName || order.productName || null;
+        modelName = modelName || order.modelName || null;
+        option = option || order.option || null;
+        color = color || order.color || null;
+        imageUrl = imageUrl || order.imageUrl || null;
+        price = order.price ?? null;
+      } catch (error) {
+        this.logger.debug(
+          `Rental enrich skipped orderNo=${job.orderNo}: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      }
+    }
+
+    const description = [brand, productName, modelName, color, option]
+      .map((v) => (typeof v === 'string' ? v.trim() : ''))
+      .filter(Boolean)
+      .join(' / ');
+
     return {
-      brand: job.brand ?? null,
-      productName: job.productName ?? null,
-      modelName: job.modelName ?? null,
-      option: job.option ?? null,
-      color: job.color ?? null,
-      imageUrl: job.referenceImageUrl ?? null,
+      brand,
+      productName,
+      modelName,
+      option,
+      color,
+      price,
+      imageUrl,
+      description: description || null,
     };
   }
 }

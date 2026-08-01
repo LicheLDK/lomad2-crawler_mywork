@@ -192,6 +192,7 @@ describe('InvestigationService write APIs', () => {
       get: jest.fn((key: string) => {
         if (key === 'investigation.autoCreateEnabled') return true;
         if (key === 'investigation.aiScoreThreshold') return 90;
+        if (key === 'investigation.watchlistMinScore') return 70;
         if (key === 'investigation.orderUrlTemplate')
           return '/getOrderInfo?order_id={orderNo}';
         return undefined;

@@ -59,6 +59,7 @@ type RentalInvestigation = {
   siteCode: string;
   searchHistoryId?: string | null;
   searchJobId?: string | null;
+  watchlisted?: boolean;
   createdAt: string;
 };
 
@@ -788,9 +789,16 @@ function InvestigationRow({
               {inv.listingTitle || inv.productName}
             </p>
           </div>
-          <span className="rounded-md bg-teal-50 px-1.5 py-0.5 text-[11px] tabular-nums text-teal-800">
-            AI {inv.aiScorePercent}%
-          </span>
+          <div className="flex flex-wrap items-center gap-1">
+            {inv.watchlisted ? (
+              <span className="rounded-md bg-amber-50 px-1.5 py-0.5 text-[11px] text-amber-800">
+                관찰
+              </span>
+            ) : null}
+            <span className="rounded-md bg-teal-50 px-1.5 py-0.5 text-[11px] tabular-nums text-teal-800">
+              AI {inv.aiScorePercent}%
+            </span>
+          </div>
         </div>
         <p className="mt-1 text-[11px] text-ink-400">
           {siteLabel(inv.siteCode)} · {inv.status} · {formatWhen(inv.createdAt)}

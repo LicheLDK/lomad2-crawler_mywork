@@ -40,6 +40,12 @@ export interface RentalOrderRaw {
   customer_name?: string | null;
   customerName?: string | null;
   count?: number | null;
+  /** 상품가 / 렌탈가 (API 제공 시 — Matching price 항목·Rule 용) */
+  price?: string | number | null;
+  product_price?: string | number | null;
+  productPrice?: string | number | null;
+  sale_price?: string | number | null;
+  salePrice?: string | number | null;
 }
 
 export interface RentalProductRaw {
@@ -78,6 +84,8 @@ export interface RentalOrder {
   imageUrl: string | null;
   username: string | null;
   count: number | null;
+  /** 상품가 (없으면 null — Matching/Rule 은 skip) */
+  price: string | number | null;
 }
 
 /** 정규화된 상품 컨텍스트 */

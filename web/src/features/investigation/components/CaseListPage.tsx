@@ -207,6 +207,11 @@ export function CaseListPage() {
                     >
                       <td className="px-4 py-3 font-medium tabular-nums text-ink-800 sm:px-5">
                         {row.caseNo}
+                        {row.watchlisted ? (
+                          <span className="ml-1.5 rounded bg-amber-50 px-1 py-0.5 text-[10px] font-normal text-amber-800">
+                            관찰
+                          </span>
+                        ) : null}
                       </td>
                       <td className="max-w-[240px] truncate px-4 py-3 text-ink-900">
                         {row.productName}

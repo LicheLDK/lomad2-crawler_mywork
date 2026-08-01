@@ -209,6 +209,13 @@ export class RentalService {
         typeof raw.count === 'number' && Number.isFinite(raw.count)
           ? raw.count
           : null,
+      price: pickLoosePrice(
+        raw.price,
+        raw.product_price,
+        raw.productPrice,
+        raw.sale_price,
+        raw.salePrice,
+      ),
     };
   }
 
@@ -256,4 +263,15 @@ function pickUrl(
     }
   }
   return undefined;
+}
+
+function pickLoosePrice(
+  ...candidates: Array<string | number | null | undefined>
+): string | number | null {
+  for (const c of candidates) {
+    if (c == null) continue;
+    if (typeof c === 'number' && Number.isFinite(c)) return c;
+    if (typeof c === 'string' && c.trim()) return c.trim();
+  }
+  return null;
 }

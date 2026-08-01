@@ -142,6 +142,26 @@ export default registerAs('ai', () => {
     localPreprocessNormalize:
       (process.env.AI_LOCAL_PREPROCESS_NORMALIZE || 'true').toLowerCase() !==
       'false',
+
+    /**
+     * Matching LLM 1차 배치 상한 (titleSimilarity 상위 N).
+     * 기본 25 — 검색 결과가 많을 때 커버리지 확대.
+     */
+    matchBatchLimit: parseInt(process.env.AI_MATCH_BATCH_LIMIT || '25', 10),
+
+    /**
+     * 2차 패스: 1차 미포함 후보 중 추가 LLM 매칭 수.
+     * 0이면 2차 비활성. 로컬 이미지 게이트가 켜져 있으면 로컬 유사도 우선 선별.
+     */
+    matchSecondPassLimit: parseInt(
+      process.env.AI_MATCH_SECOND_PASS_LIMIT || '10',
+      10,
+    ),
+
+    /** 2차 패스 후보의 최소 titleSimilarity (0~1) */
+    matchSecondPassMinTitle: parseFloat(
+      process.env.AI_MATCH_SECOND_PASS_MIN_TITLE || '0.2',
+    ),
   };
 });
 

@@ -118,6 +118,14 @@ export class InvestigationCaseEntity {
   @Column({ type: 'boolean', default: false })
   autoCreated!: boolean;
 
+  /**
+   * 워치리스트(관찰) — AI Score 가 자동생성 임계 미만·관찰 하한 이상일 때.
+   * status 워크플로와 분리해 UI/전이 규칙을 깨지 않는다.
+   */
+  @Index()
+  @Column({ type: 'boolean', default: false })
+  watchlisted!: boolean;
+
   @Column({ type: 'jsonb', default: [] })
   timeline!: InvestigationTimelineEvent[];
 

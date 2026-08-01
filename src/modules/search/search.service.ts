@@ -399,6 +399,10 @@ export class SearchService {
       description: r?.description ?? null,
       titleSimilarity: link.titleSimilarity,
       imageSimilarity: link.imageSimilarity,
+      matchingScore: link.matchingScore,
+      aiScore: link.aiScore,
+      matchingReason: link.matchingReason,
+      matchingScores: link.matchingScores,
       createdAt: link.createdAt,
       screenshotUrl: r?.imageHash?.localPath
         ? `storage/images/${r.id}`

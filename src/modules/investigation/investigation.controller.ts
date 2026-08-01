@@ -41,6 +41,7 @@ export class InvestigationController {
   async config() {
     return {
       aiScoreThreshold: await this.investigationService.getAiScoreThreshold(),
+      watchlistMinScore: this.investigationService.getWatchlistMinScore(),
       autoCreateEnabled: this.investigationService.isAutoCreateEnabled(),
     };
   }

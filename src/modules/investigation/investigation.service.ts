@@ -38,7 +38,10 @@ export type AutoCreateResult = {
   skipped: number;
   excluded: number;
   warned: number;
+  /** 워치리스트로 생성/갱신된 건수 (created+updated 중 watchlisted) */
+  watchlisted: number;
   threshold: number;
+  watchlistMinScore: number;
 };
 
 @Injectable()
@@ -81,12 +84,40 @@ export class InvestigationService {
     return Math.max(0, Math.min(100, Math.round(n)));
   }
 
+  /**
+   * 워치리스트 하한 (0~100). 0 이하면 워치리스트 비활성.
+   * createThreshold 미만 · watchlistMin 이상 → Investigation + watchlisted
+   */
+  getWatchlistMinScore(): number {
+    const raw = this.config.get<number>('investigation.watchlistMinScore');
+    const n = Number.isFinite(raw) ? Number(raw) : 70;
+    return Math.max(0, Math.min(100, Math.round(n)));
+  }
+
   isAutoCreateEnabled(): boolean {
     return this.config.get<boolean>('investigation.autoCreateEnabled') !== false;
   }
 
+  private emptyAutoCreateResult(
+    threshold: number,
+    watchlistMinScore: number,
+  ): AutoCreateResult {
+    return {
+      created: [],
+      updated: [],
+      skipped: 0,
+      excluded: 0,
+      warned: 0,
+      watchlisted: 0,
+      threshold,
+      watchlistMinScore,
+    };
+  }
+
   /**
-   * 검색 완료 후 AI Score >= 기준인 결과로 Investigation 자동 생성.
+   * 검색 완료 후 AI Score 기준 Investigation 자동 생성.
+   * - score ≥ createThreshold → Open (watchlisted=false)
+   * - watchlistMin ≤ score < createThreshold → Open + watchlisted=true
    * results 를 넘기면 DB 외 캐시(Elastic) 결과도 포함한다.
    */
   async autoCreateFromSearch(params: {
@@ -121,31 +152,18 @@ export class InvestigationService {
       } | null;
     }>;
   }): Promise<AutoCreateResult> {
-    if (!this.isAutoCreateEnabled()) {
-      return {
-        created: [],
-        updated: [],
-        skipped: 0,
-        excluded: 0,
-        warned: 0,
-        threshold: await this.getAiScoreThreshold(),
-      };
-    }
-
     const threshold = await this.getAiScoreThreshold();
+    const watchlistMinScore = this.getWatchlistMinScore();
+
+    if (!this.isAutoCreateEnabled()) {
+      return this.emptyAutoCreateResult(threshold, watchlistMinScore);
+    }
 
     const history = await this.historyRepo.findOne({
       where: { id: params.searchHistoryId },
     });
     if (!history) {
-      return {
-        created: [],
-        updated: [],
-        skipped: 0,
-        excluded: 0,
-        warned: 0,
-        threshold,
-      };
+      return this.emptyAutoCreateResult(threshold, watchlistMinScore);
     }
 
     let job: SearchJob | null = null;
@@ -178,10 +196,10 @@ export class InvestigationService {
             price: link.price,
             titleSimilarity: link.titleSimilarity,
             imageSimilarity: link.imageSimilarity,
-            matchingScore: null as number | null,
-            aiScore: null as number | null,
-            matchingReason: null as string | null,
-            matchingScores: null,
+            matchingScore: link.matchingScore,
+            aiScore: link.aiScore,
+            matchingReason: link.matchingReason,
+            matchingScores: link.matchingScores,
           }));
 
     const created: InvestigationCaseEntity[] = [];
@@ -189,6 +207,7 @@ export class InvestigationService {
     let skipped = 0;
     let excluded = 0;
     let warned = 0;
+    let watchlisted = 0;
     const rentalPrice = parseLoosePrice(params.rentalPrice);
 
     for (const result of sourceResults) {
@@ -196,7 +215,8 @@ export class InvestigationService {
       const aiScore100 = Math.round(aiScore01 * 100);
 
       let ruleWarnings: AiRuleMatch[] = [];
-      let shouldCreate = aiScore100 >= threshold;
+      let shouldCreate = false;
+      let asWatchlist = false;
 
       if (this.ruleEngine) {
         const evaluation = await this.ruleEngine.evaluate({
@@ -236,12 +256,29 @@ export class InvestigationService {
           continue;
         }
 
-        shouldCreate = evaluation.createInvestigation;
+        if (evaluation.createInvestigation) {
+          shouldCreate = true;
+          asWatchlist = false;
+        } else if (
+          watchlistMinScore > 0 &&
+          aiScore100 >= watchlistMinScore &&
+          aiScore100 < threshold
+        ) {
+          shouldCreate = true;
+          asWatchlist = true;
+        }
+
         ruleWarnings = evaluation.warnings;
         if (ruleWarnings.length) warned += 1;
-      } else if (aiScore01 < threshold / 100) {
-        skipped += 1;
-        continue;
+      } else if (aiScore100 >= threshold) {
+        shouldCreate = true;
+        asWatchlist = false;
+      } else if (
+        watchlistMinScore > 0 &&
+        aiScore100 >= watchlistMinScore
+      ) {
+        shouldCreate = true;
+        asWatchlist = true;
       }
 
       if (!shouldCreate) {
@@ -266,8 +303,10 @@ export class InvestigationService {
           job,
           threshold,
           ruleWarnings,
+          watchlisted: asWatchlist,
         });
         updated.push(updatedCase);
+        if (updatedCase.watchlisted) watchlisted += 1;
         continue;
       }
 
@@ -279,13 +318,15 @@ export class InvestigationService {
         autoCreated: true,
         threshold,
         ruleWarnings,
+        watchlisted: asWatchlist,
       });
       created.push(caseEntity);
+      if (caseEntity.watchlisted) watchlisted += 1;
     }
 
     if (created.length) {
       this.logger.log(
-        `Auto-created ${created.length} investigation(s) for search=${params.searchHistoryId} threshold=${threshold} excluded=${excluded} warned=${warned}`,
+        `Auto-created ${created.length} investigation(s) for search=${params.searchHistoryId} threshold=${threshold} watchlistMin=${watchlistMinScore} watchlisted=${watchlisted} excluded=${excluded} warned=${warned}`,
       );
     }
 
@@ -295,7 +336,16 @@ export class InvestigationService {
       );
     }
 
-    return { created, updated, skipped, excluded, warned, threshold };
+    return {
+      created,
+      updated,
+      skipped,
+      excluded,
+      warned,
+      watchlisted,
+      threshold,
+      watchlistMinScore,
+    };
   }
 
   async list(limit = 50) {
@@ -735,6 +785,8 @@ export class InvestigationService {
     ruleWarnings?: AiRuleMatch[];
     /** 수동 생성 시 job.orderNo 가 없을 때 사용 */
     orderNoOverride?: string | null;
+    /** 워치리스트(관찰) 플래그 */
+    watchlisted?: boolean;
   }): Promise<InvestigationCaseEntity> {
     const {
       result,
@@ -745,6 +797,7 @@ export class InvestigationService {
       threshold,
       ruleWarnings = [],
       orderNoOverride = null,
+      watchlisted = false,
     } = params;
     const now = new Date();
     const caseNo = await this.nextCaseNumber(now);
@@ -773,12 +826,16 @@ export class InvestigationService {
       this.tl(
         'investigation_created',
         now.toISOString(),
-        autoCreated
-          ? 'Investigation 자동 생성'
-          : 'Investigation 생성',
-        autoCreated
-          ? `${caseNo} (AI Rule · AI Score ${scorePct}% · threshold ${threshold})`
-          : caseNo,
+        watchlisted
+          ? 'Investigation 워치리스트 등록'
+          : autoCreated
+            ? 'Investigation 자동 생성'
+            : 'Investigation 생성',
+        watchlisted
+          ? `${caseNo} (워치리스트 · AI Score ${scorePct}% · ${this.getWatchlistMinScore()}~${threshold - 1})`
+          : autoCreated
+            ? `${caseNo} (AI Rule · AI Score ${scorePct}% · threshold ${threshold})`
+            : caseNo,
       ),
     ];
 
@@ -953,6 +1010,7 @@ export class InvestigationService {
       contractNo: null,
       customerName: null,
       autoCreated,
+      watchlisted,
       timeline,
       aiAnalysis: this.buildAiAnalysis(result, aiScore),
       notes: [],
@@ -1008,6 +1066,7 @@ export class InvestigationService {
     job: SearchJob | null;
     threshold: number;
     ruleWarnings?: AiRuleMatch[];
+    watchlisted?: boolean;
   }): Promise<InvestigationCaseEntity> {
     const {
       existing,
@@ -1017,6 +1076,7 @@ export class InvestigationService {
       job,
       threshold,
       ruleWarnings = [],
+      watchlisted = false,
     } = params;
     const now = new Date();
     const scorePct = Math.round(aiScore * 100);
@@ -1028,7 +1088,7 @@ export class InvestigationService {
       this.tl(
         'ai_score_updated',
         now.toISOString(),
-        'AI 매칭 점수로 갱신',
+        watchlisted ? 'AI 매칭 점수 갱신 (워치리스트)' : 'AI 매칭 점수로 갱신',
         result.matchingReason
           ? `AI Score ${scorePct}% (기존 ${prevPct}%) · ${result.matchingReason}`
           : `AI Score ${scorePct}% (기존 ${prevPct}%) · threshold ${threshold}`,
@@ -1070,6 +1130,7 @@ export class InvestigationService {
       searchHistoryId: history.id,
       searchJobId: job?.id ?? existing.searchJobId,
       orderNo,
+      watchlisted,
       timeline,
       aiAnalysis: this.buildAiAnalysis(result, aiScore),
     });
@@ -1282,6 +1343,7 @@ export class InvestigationService {
       searchHistoryId: c.searchHistoryId,
       searchJobId: c.searchJobId,
       autoCreated: c.autoCreated,
+      watchlisted: c.watchlisted ?? false,
       timeline: c.timeline ?? [],
       aiAnalysis: c.aiAnalysis,
       /** Investigation Analysis (Plain text) — Recommendation 과 분리 */

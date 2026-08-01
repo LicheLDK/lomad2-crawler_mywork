@@ -310,6 +310,7 @@ export function mapServerCase(dto: ServerInvestigationDto): InvestigationCase {
     price: dto.price ?? null,
     imageUrl: dto.imageUrl ?? null,
     url: dto.url ?? null,
+    watchlisted: dto.watchlisted === true,
     aiAnalysis,
     timeline,
     investigationSummary: summaryFromDto ?? fromTimeline.summary,

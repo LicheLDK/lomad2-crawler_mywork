@@ -63,7 +63,7 @@ const MATCH_WEIGHTS: Record<keyof AiMatchingItemScores, number> = {
   ocr: 0.05,
 };
 
-const MATCH_BATCH_LIMIT = 15;
+const MATCH_BATCH_LIMIT_DEFAULT = 25;
 const MATCH_CONCURRENCY = 2;
 
 /**
@@ -425,37 +425,84 @@ export class AiService {
   }
 
   /**
-   * 검색 결과 목록에 Matching Engine 적용 (상위 N건, 동시성 제한)
+   * 검색 결과 목록에 Matching Engine 적용.
+   * 1차: title/imageSimilarity 상위 N LLM
+   * 2차: 미포함 후보 중 로컬 이미지(또는 title)로 선별한 상위 K LLM
    */
   async matchSearchResults(params: {
     rental: AiRentalProduct;
     listings: AiListingCandidate[];
     limit?: number;
+    secondPassLimit?: number;
   }): Promise<AiMatchingResult[]> {
+    const configuredLimit = this.config.get<number>('ai.matchBatchLimit');
     const limit = Math.min(
-      Math.max(params.limit ?? MATCH_BATCH_LIMIT, 1),
+      Math.max(
+        params.limit ??
+          (Number.isFinite(configuredLimit)
+            ? Number(configuredLimit)
+            : MATCH_BATCH_LIMIT_DEFAULT),
+        1,
+      ),
       50,
     );
+    const configuredSecond = this.config.get<number>('ai.matchSecondPassLimit');
+    const secondPassLimit = Math.min(
+      Math.max(
+        params.secondPassLimit ??
+          (Number.isFinite(configuredSecond) ? Number(configuredSecond) : 10),
+        0,
+      ),
+      20,
+    );
+    const minTitleRaw = this.config.get<number>('ai.matchSecondPassMinTitle');
+    const minTitle = Number.isFinite(minTitleRaw) ? Number(minTitleRaw) : 0.2;
+
     const sorted = [...params.listings].sort((a, b) => {
-      const sa = Math.max(
-        a.titleSimilarity ?? 0,
-        a.imageSimilarity ?? 0,
-      );
-      const sb = Math.max(
-        b.titleSimilarity ?? 0,
-        b.imageSimilarity ?? 0,
-      );
+      const sa = Math.max(a.titleSimilarity ?? 0, a.imageSimilarity ?? 0);
+      const sb = Math.max(b.titleSimilarity ?? 0, b.imageSimilarity ?? 0);
       return sb - sa;
     });
-    const targets = sorted.slice(0, limit);
-    const results: AiMatchingResult[] = [];
+    const pass1Targets = sorted.slice(0, limit);
+    const results = await this.matchListingsBatch(params.rental, pass1Targets);
 
+    const matchedIds = new Set(
+      results.map((r) => r.listingId).filter((id): id is string => !!id),
+    );
+    const remaining = sorted.filter((l) => l.id && !matchedIds.has(l.id));
+
+    let pass2Targets: AiListingCandidate[] = [];
+    if (secondPassLimit > 0 && remaining.length > 0) {
+      pass2Targets = await this.selectSecondPassTargets({
+        rental: params.rental,
+        remaining,
+        secondPassLimit,
+        minTitle,
+      });
+      if (pass2Targets.length > 0) {
+        const pass2 = await this.matchListingsBatch(
+          params.rental,
+          pass2Targets,
+        );
+        results.push(...pass2);
+      }
+    }
+
+    this.logger.log(
+      `AI Matching Engine done matched=${results.length} pass1=${pass1Targets.length} pass2=${pass2Targets.length}`,
+    );
+    return results;
+  }
+
+  private async matchListingsBatch(
+    rental: AiRentalProduct,
+    targets: AiListingCandidate[],
+  ): Promise<AiMatchingResult[]> {
+    const results: AiMatchingResult[] = [];
     for (let i = 0; i < targets.length; i += MATCH_CONCURRENCY) {
       const chunk = targets.slice(i, i + MATCH_CONCURRENCY);
       const settled = await Promise.allSettled(
-        chunk.map((listing) =>
-          this.matchListing({ rental: params.rental, listing }),
-        ),
+        chunk.map((listing) => this.matchListing({ rental, listing })),
       );
       for (const item of settled) {
         if (item.status === 'fulfilled') {
@@ -471,11 +518,65 @@ export class AiService {
         }
       }
     }
-
-    this.logger.log(
-      `AI Matching Engine done matched=${results.length}/${targets.length}`,
-    );
     return results;
+  }
+
+  /**
+   * 2차 패스 후보 선별.
+   * 로컬 이미지 게이트 사용 가능하면 localSimilarity 상위 K,
+   * 아니면 titleSimilarity 상위 K.
+   */
+  private async selectSecondPassTargets(params: {
+    rental: AiRentalProduct;
+    remaining: AiListingCandidate[];
+    secondPassLimit: number;
+    minTitle: number;
+  }): Promise<AiListingCandidate[]> {
+    const pool = params.remaining
+      .filter((l) => (l.titleSimilarity ?? 0) >= params.minTitle)
+      .slice(0, 40);
+
+    if (pool.length === 0) return [];
+
+    const rentalImage = params.rental.imageUrl?.trim();
+    if (
+      rentalImage &&
+      this.matchingLocalImage.isEnabled()
+    ) {
+      type Scored = { listing: AiListingCandidate; localSim: number };
+      const scored: Scored[] = [];
+      for (let i = 0; i < pool.length; i += 4) {
+        const chunk = pool.slice(i, i + 4);
+        const settled = await Promise.allSettled(
+          chunk.map(async (listing) => {
+            const listingImage = listing.imageUrl?.trim();
+            if (!listingImage) {
+              return {
+                listing,
+                localSim: (listing.titleSimilarity ?? 0) * 100,
+              };
+            }
+            const gate = await this.matchingLocalImage.evaluate({
+              rentalImageUrl: rentalImage,
+              listingImageUrl: listingImage,
+            });
+            const localSim =
+              gate?.localSimilarity ??
+              (listing.titleSimilarity ?? 0) * 100;
+            return { listing, localSim };
+          }),
+        );
+        for (const item of settled) {
+          if (item.status === 'fulfilled') scored.push(item.value);
+        }
+      }
+      scored.sort((a, b) => b.localSim - a.localSim);
+      return scored
+        .slice(0, params.secondPassLimit)
+        .map((s) => s.listing);
+    }
+
+    return pool.slice(0, params.secondPassLimit);
   }
 
   /**

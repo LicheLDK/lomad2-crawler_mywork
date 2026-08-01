@@ -60,6 +60,21 @@ export class SearchHistoryResult {
   @Column({ type: 'float', default: 0 })
   imageSimilarity!: number;
 
+  /** AI Matching Engine — 0~100 (P0 영속화) */
+  @Column({ type: 'float', nullable: true })
+  matchingScore!: number | null;
+
+  /** AI Matching Engine — 0~100 */
+  @Column({ type: 'float', nullable: true })
+  aiScore!: number | null;
+
+  @Column({ type: 'text', nullable: true })
+  matchingReason!: string | null;
+
+  /** 항목별 점수 JSON (brand/model/productName/…) */
+  @Column({ type: 'jsonb', nullable: true })
+  matchingScores!: Record<string, number> | null;
+
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt!: Date;
 }

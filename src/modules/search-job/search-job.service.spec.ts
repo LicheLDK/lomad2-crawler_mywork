@@ -27,6 +27,7 @@ describe('SearchJobService', () => {
     };
     const historyResultRepo = {
       createQueryBuilder: jest.fn(),
+      update: jest.fn().mockResolvedValue({ affected: 1 }),
     };
     const searchService = {
       search: jest.fn(),
@@ -43,10 +44,13 @@ describe('SearchJobService', () => {
     const investigationService = {
       autoCreateFromSearch: jest.fn().mockResolvedValue({
         created: [],
+        updated: [],
         skipped: 0,
         excluded: 0,
         warned: 0,
+        watchlisted: 0,
         threshold: 90,
+        watchlistMinScore: 70,
       }),
       countBySearchJobId: jest.fn(),
       countBySearchJobIds: jest.fn(),
@@ -337,10 +341,13 @@ describe('SearchJobService', () => {
     ]);
     investigationService.autoCreateFromSearch.mockResolvedValue({
       created: [],
+      updated: [],
       skipped: 0,
       excluded: 0,
       warned: 0,
+      watchlisted: 0,
       threshold: 90,
+      watchlistMinScore: 70,
     });
 
     await (service as any).triggerAutoInvestigation('job-1');
@@ -353,7 +360,9 @@ describe('SearchJobService', () => {
           modelName: '16Z90S',
           option: '32GB RAM',
           color: 'White',
+          price: null,
           imageUrl: 'https://example.com/gram.jpg',
+          description: 'LG / Gram 16 / 16Z90S / White / 32GB RAM',
         },
       }),
     );
@@ -361,6 +370,7 @@ describe('SearchJobService', () => {
       expect.objectContaining({
         searchHistoryId: 'history-1',
         searchJobId: 'job-1',
+        rentalPrice: null,
       }),
     );
   });
@@ -403,10 +413,13 @@ describe('SearchJobService', () => {
     aiService.matchSearchResults.mockResolvedValue([]);
     investigationService.autoCreateFromSearch.mockResolvedValue({
       created: [],
+      updated: [],
       skipped: 0,
       excluded: 0,
       warned: 0,
+      watchlisted: 0,
       threshold: 90,
+      watchlistMinScore: 70,
     });
 
     await expect(
@@ -421,7 +434,9 @@ describe('SearchJobService', () => {
           modelName: null,
           option: null,
           color: null,
+          price: null,
           imageUrl: null,
+          description: 'Unknown Product',
         },
       }),
     );

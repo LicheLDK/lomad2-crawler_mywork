@@ -102,6 +102,8 @@ export type InvestigationCase = {
   price?: string | null;
   imageUrl?: string | null;
   url?: string | null;
+  /** 워치리스트(70~89 관찰) */
+  watchlisted?: boolean;
   /** @deprecated noteEntries 사용 */
   notes?: string | null;
   noteEntries?: InvestigationNote[];
@@ -170,6 +172,7 @@ export type ServerInvestigationDto = {
   searchHistoryId?: string | null;
   searchJobId?: string | null;
   autoCreated?: boolean;
+  watchlisted?: boolean;
   timeline?: Array<{
     id?: string;
     kind?: string;
@@ -199,6 +202,7 @@ export type InvestigationListResponse = {
 
 export type InvestigationConfigResponse = {
   aiScoreThreshold: number;
+  watchlistMinScore?: number;
   autoCreateEnabled: boolean;
 };
 

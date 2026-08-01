@@ -79,6 +79,7 @@ describe('InvestigationService autoCreateFromSearch', () => {
           orderProductName: entity.orderProductName ?? null,
           listingTitle: entity.listingTitle ?? null,
           autoCreated: entity.autoCreated ?? true,
+          watchlisted: entity.watchlisted ?? false,
           timeline: entity.timeline ?? [],
           aiAnalysis: entity.aiAnalysis ?? null,
           notes: entity.notes ?? [],
@@ -136,6 +137,7 @@ describe('InvestigationService autoCreateFromSearch', () => {
       get: jest.fn((key: string) => {
         if (key === 'investigation.autoCreateEnabled') return true;
         if (key === 'investigation.aiScoreThreshold') return 90;
+        if (key === 'investigation.watchlistMinScore') return 70;
         if (key === 'investigation.orderUrlTemplate')
           return '/getOrderInfo?order_id={orderNo}';
         return undefined;
@@ -353,5 +355,42 @@ describe('InvestigationService autoCreateFromSearch', () => {
     expect(result.excluded).toBe(1);
     expect(result.skipped).toBe(1);
     expect(cases).toHaveLength(0);
+  });
+
+  it('creates a watchlisted case when AI score is between watchlist min and create threshold', async () => {
+    const { service, cases } = createService();
+    const midScore: SearchResultInput = {
+      id: 'listing-watch',
+      title: '관찰 대상 상품',
+      siteCode: 'bungae',
+      url: 'https://example.com/listing-watch',
+      aiScore: 78,
+      matchingScore: 78,
+      matchingReason: '유사하나 옵션 불확실',
+      matchingScores: {
+        brand: 90,
+        model: 80,
+        productName: 75,
+        image: 70,
+      },
+      price: '300000',
+    };
+
+    const result = await service.autoCreateFromSearch({
+      searchHistoryId: 'history-1',
+      searchJobId: 'job-1',
+      results: [midScore],
+    });
+
+    expect(result.created).toHaveLength(1);
+    expect(result.watchlisted).toBe(1);
+    expect(cases).toHaveLength(1);
+    expect(cases[0].watchlisted).toBe(true);
+    expect(cases[0].aiScore).toBeCloseTo(0.78);
+    expect(
+      cases[0].timeline.some(
+        (event) => event.title === 'Investigation 워치리스트 등록',
+      ),
+    ).toBe(true);
   });
 });

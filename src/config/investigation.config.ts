@@ -10,6 +10,15 @@ export default registerAs('investigation', () => ({
     process.env.INVESTIGATION_AI_SCORE_THRESHOLD || '90',
     10,
   ),
+  /**
+   * 자동 생성 임계 미만이지만 관찰할 하한 (기본 70).
+   * watchlistMin ≤ score < createThreshold → Investigation 생성 + watchlisted=true
+   * 0 이하면 워치리스트 비활성.
+   */
+  watchlistMinScore: parseInt(
+    process.env.INVESTIGATION_WATCHLIST_MIN_SCORE || '70',
+    10,
+  ),
   autoCreateEnabled:
     (process.env.INVESTIGATION_AUTO_CREATE || 'true').toLowerCase() !==
     'false',
