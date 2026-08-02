@@ -73,6 +73,9 @@ describe('adapter normalize()', () => {
   it('중고나라: isJunkJoongnaTitle 판별', () => {
     expect(isJunkJoongnaTitle('판매하기')).toBe(true);
     expect(isJunkJoongnaTitle('구매하기')).toBe(true);
+    expect(isJunkJoongnaTitle('채팅하기')).toBe(true);
+    expect(isJunkJoongnaTitle('채팅하기 버튼')).toBe(true);
+    expect(isJunkJoongnaTitle('판매하기 버튼')).toBe(true);
     expect(isJunkJoongnaTitle('에어론 풀 체어')).toBe(false);
   });
 
@@ -94,6 +97,30 @@ describe('adapter normalize()', () => {
     ]);
     expect(listings).toHaveLength(1);
     expect(listings[0].title).toBe('에어론 풀 체어 그라파이트');
+  });
+
+  it('중고나라: 가격 없는 정상 매물(채팅 버튼 아님)은 유지', async () => {
+    const adapter = new JoonggonaraAdapter(mockConfig());
+    const listings = await adapter.normalize([
+      {
+        // 실제 버그 사례: 채팅 아이콘의 접근성 라벨이 카드로 스크랩된 경우 (제목으로 제외)
+        title: '채팅하기 버튼',
+        priceText: null,
+        href: 'https://web.joongna.com/product/9',
+        image: 'https://img.example/chat-icon.png',
+      },
+      {
+        // 정상 매물인데 카드에 가격이 노출되지 않는 경우도 있음 (가격 유무로 걸러선 안 됨)
+        title: '브리온베가 스피커 라디오포노그라포 화이트 삽니다',
+        priceText: null,
+        href: 'https://web.joongna.com/product/10',
+        image: 'https://img.example/c.jpg',
+      },
+    ]);
+    expect(listings).toHaveLength(1);
+    expect(listings[0].title).toBe(
+      '브리온베가 스피커 라디오포노그라포 화이트 삽니다',
+    );
   });
 
   it('당근: JSON-LD 형태 mapItem', async () => {

@@ -27,13 +27,16 @@ export const JOONGNA_JUNK_TITLES = new Set([
   '최신순',
   '낮은가격순',
   '높은가격순',
+  '채팅하기',
+  '문의하기',
 ]);
 
 export function isJunkJoongnaTitle(title: string): boolean {
   const s = title.replace(/\s+/g, ' ').trim();
   if (!s || s.length < 2) return true;
   if (JOONGNA_JUNK_TITLES.has(s)) return true;
-  if (/^(판매|구매|찜|공유|신고)하기$/.test(s)) return true;
+  // "판매하기 버튼", "채팅하기 버튼" 등 — 아이콘 버튼의 접근성 라벨(aria-label/alt)
+  if (/^(판매|구매|찜|공유|신고|채팅|문의)하기(\s*버튼)?$/.test(s)) return true;
   if (/^[\d,]+원?$/.test(s)) return true;
   return false;
 }
@@ -88,13 +91,15 @@ export class JoonggonaraAdapter extends BasePlaywrightAdapter {
         '최신순',
         '낮은가격순',
         '높은가격순',
+        '채팅하기',
+        '문의하기',
       ]);
 
       function isJunk(title: string): boolean {
         const s = title.replace(/\s+/g, ' ').trim();
         if (!s || s.length < 2) return true;
         if (junkExact.has(s)) return true;
-        if (/^(판매|구매|찜|공유|신고)하기$/.test(s)) return true;
+        if (/^(판매|구매|찜|공유|신고|채팅|문의)하기(\s*버튼)?$/.test(s)) return true;
         if (/^[\d,]+원?$/.test(s)) return true;
         return false;
       }
