@@ -6,6 +6,8 @@ import {
   formatPrice,
   formatRelative,
   formatTime,
+  isRateLimitedError,
+  rateLimitRetryHint,
   siteLabel,
   siteTone,
   statusLabel,
@@ -162,6 +164,9 @@ export function ResultsPanel({
     };
   }, [detail, results, inFlight]);
 
+  const rateLimitHint = rateLimitRetryHint(detail?.errorMessage);
+  const rateLimited = isRateLimitedError(detail?.errorMessage);
+
   return (
     <section className="flex min-h-[420px] flex-col rounded-2xl border border-ink-100/80 bg-white/75 p-4 shadow-soft sm:p-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -192,7 +197,17 @@ export function ResultsPanel({
         ) : null}
       </div>
 
-      {detail?.errorMessage ? (
+      {rateLimited ? (
+        <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-950">
+          <p className="font-medium">사이트 일시 차단</p>
+          <p className="mt-1 leading-relaxed text-amber-900/90">
+            {rateLimitHint}
+          </p>
+          {detail?.errorMessage ? (
+            <p className="mt-2 text-xs text-amber-800/80">{detail.errorMessage}</p>
+          ) : null}
+        </div>
+      ) : detail?.errorMessage ? (
         <p className="mt-3 rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-800">
           {detail.errorMessage}
         </p>
@@ -416,7 +431,14 @@ export function ResultsPanel({
       ) : null}
 
       {detail && !inFlight && results.length === 0 ? (
-        <p className="mt-8 text-sm text-ink-500">결과가 없습니다.</p>
+        <div className="mt-8 space-y-2 text-sm text-ink-500">
+          <p>{rateLimited ? '차단으로 결과를 가져오지 못했습니다.' : '결과가 없습니다.'}</p>
+          {rateLimited ? (
+            <p className="text-amber-800">
+              잠시 후 다시 검색해 주세요. 지금은 강제크롤을 반복하지 않는 편이 좋습니다.
+            </p>
+          ) : null}
+        </div>
       ) : null}
 
       <ResultDrawer

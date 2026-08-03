@@ -34,6 +34,8 @@ import {
   subscribeSearchProgress,
   type CrawlProgressEvent,
 } from './lib/socket';
+import { rateLimitRetryHint } from './lib/format';
+import { toast } from './components/Toast';
 
 const AnalyticsPage = lazy(() =>
   import('./pages/AnalyticsPage').then((m) => ({ default: m.AnalyticsPage })),
@@ -79,6 +81,22 @@ export default function App() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const pollRef = useRef<number | null>(null);
   const unsubRef = useRef<(() => void) | null>(null);
+  const notifiedSearchRef = useRef<string | null>(null);
+
+  function notifySearchOutcome(next: SearchDetail) {
+    if (!TERMINAL.has(next.status)) return;
+    if (notifiedSearchRef.current === next.searchId) return;
+    notifiedSearchRef.current = next.searchId;
+
+    const rateHint = rateLimitRetryHint(next.errorMessage);
+    if (rateHint) {
+      toast(rateHint, { tone: 'error', durationMs: 8000 });
+      return;
+    }
+    if (next.status === 'failed' && next.errorMessage) {
+      toast(next.errorMessage, { tone: 'error', durationMs: 6000 });
+    }
+  }
 
   const stopPoll = useCallback(() => {
     if (pollRef.current != null) {
@@ -165,6 +183,7 @@ export default function App() {
       setProgress(null);
       stopProgressSocket();
       setActiveSearchId(null);
+      notifySearchOutcome(next);
       void refreshMeta();
     } else if (!keepBusy) {
       setBusy(true);
@@ -230,6 +249,7 @@ export default function App() {
     sites: SiteCode[];
     maxResultsPerSite: number;
     forceCrawl: boolean;
+    regions?: string[];
   }) {
     setBusy(true);
     setError(null);
@@ -242,6 +262,7 @@ export default function App() {
         keyword: payload.keyword,
         sites: payload.sites,
         maxResultsPerSite: payload.maxResultsPerSite,
+        regions: payload.regions ?? ['all'],
         useCache: !payload.forceCrawl,
       });
 
@@ -259,6 +280,7 @@ export default function App() {
         setDetail(started as SearchDetail);
         setBusy(false);
         setProgress(null);
+        notifySearchOutcome(started as SearchDetail);
         void refreshMeta();
         return;
       }
@@ -336,6 +358,7 @@ export default function App() {
       sites: fromItem.length > 0 ? fromItem : allowed,
       maxResultsPerSite: 10,
       forceCrawl: false,
+      regions: ['all'],
     });
   }
 

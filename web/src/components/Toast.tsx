@@ -13,6 +13,8 @@ type ToastItem = {
 
 export type ToastOptions = {
   tone?: ToastTone;
+  /** ms, 기본 3초 */
+  durationMs?: number;
 };
 
 let pushToastImpl: ((message: string, options?: ToastOptions) => void) | null =
@@ -44,7 +46,10 @@ export function ToastHost() {
           : `t-${Date.now()}`;
       const tone: ToastTone = options?.tone ?? 'success';
       setItems((prev) => [...prev, { id, message, tone }]);
-      window.setTimeout(() => dismiss(id), TOAST_MS);
+      window.setTimeout(
+        () => dismiss(id),
+        options?.durationMs ?? TOAST_MS,
+      );
     },
     [dismiss],
   );

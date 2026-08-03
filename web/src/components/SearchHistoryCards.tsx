@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Copy, MoreHorizontal, RotateCcw, Trash2 } from 'lucide-react';
-import { formatDateShort, statusLabel, statusTone } from '../lib/format';
+import { formatDateShort, isRateLimitedError, statusLabel, statusTone } from '../lib/format';
 import { Skeleton } from './ui/skeleton';
 import { ConfirmDialog } from './ui/confirm-dialog';
 import { DropdownMenu } from './ui/dropdown-menu';
@@ -150,6 +150,14 @@ export function SearchHistoryCards({
                     >
                       {statusLabel(item.status)}
                     </span>
+                    {isRateLimitedError(item.errorMessage) ? (
+                      <span
+                        className="shrink-0 rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] text-amber-900"
+                        title={item.errorMessage || undefined}
+                      >
+                        일시차단
+                      </span>
+                    ) : null}
                   </div>
                 </button>
 

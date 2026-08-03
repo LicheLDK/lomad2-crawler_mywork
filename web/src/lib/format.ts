@@ -97,6 +97,17 @@ export function statusLabel(status: string) {
   return map[status] || status;
 }
 
+/** 사이트 일시 차단(403/429) 안내가 errorMessage 에 포함되는지 */
+export function isRateLimitedError(message?: string | null) {
+  if (!message) return false;
+  return /차단|403|429|재시도|다시 검색/i.test(message);
+}
+
+export function rateLimitRetryHint(message?: string | null) {
+  if (!isRateLimitedError(message)) return null;
+  return '사이트가 일시적으로 검색을 막고 있습니다. 2~3분 기다린 뒤 다시 검색해 주세요. 바로 재시도하면 차단이 더 길어질 수 있습니다.';
+}
+
 /** 0~1 → 1~5 별 개수 */
 export function similarityStars(score?: number | null) {
   if (score == null || !Number.isFinite(score)) return 0;
