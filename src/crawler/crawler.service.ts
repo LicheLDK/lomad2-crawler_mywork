@@ -13,7 +13,7 @@ import {
   SearchHistoryResult,
   SearchStatus,
 } from '@/database/entities';
-import { titleSimilarity, sha256 } from '@/common/utils/string.util';
+import { titleSimilarity, sha256, crawlCandidateLimit, selectTopByTitleSimilarity } from '@/common/utils/string.util';
 import {
   computeAverageHash,
   imageSimilarityFromHashes,
@@ -31,6 +31,8 @@ export interface CrawlJobPayload {
   keyword: string;
   sites?: string[];
   maxResultsPerSite?: number;
+  /** 광역 지역 코드 (all / seoul / gyeonggi …) */
+  regions?: string[];
   referenceImageUrl?: string;
   referenceImageHash?: string;
 }
@@ -115,10 +117,21 @@ export class CrawlerService {
         this.logger.log(
           `Crawl start site=${adapter.siteCode} keyword=${payload.keyword}`,
         );
-        const listings = await adapter.crawl({
+        const maxKeep = payload.maxResultsPerSite ?? 20;
+        const candidateMax = crawlCandidateLimit(maxKeep);
+        const rawListings = await adapter.crawl({
           keyword: payload.keyword,
-          maxResults: payload.maxResultsPerSite ?? 20,
+          maxResults: candidateMax,
+          regions: payload.regions,
         });
+        const listings = selectTopByTitleSimilarity(
+          payload.keyword,
+          rawListings,
+          maxKeep,
+        );
+        this.logger.log(
+          `Crawl rank site=${adapter.siteCode} candidates=${rawListings.length} kept=${listings.length} (maxKeep=${maxKeep})`,
+        );
 
         resultCount = listings.length;
         success = true;
@@ -155,7 +168,9 @@ export class CrawlerService {
         this.logger.error(
           `Crawl failed site=${adapter.siteCode}: ${errorMessage}`,
         );
-        errors.push(`${adapter.siteCode}: ${errorMessage}`);
+        errors.push(
+          this.toUserFacingSiteError(adapter.siteCode, parsed),
+        );
       }
 
       await this.recordSiteAttempt({
@@ -198,6 +213,9 @@ export class CrawlerService {
     await this.searchHistoryRepo.save(history);
 
     const finalStatus = history.status as CrawlProgressStatus;
+    const rateLimited = errors.some((e) =>
+      /차단|403|429|재검색|다시 검색/i.test(e),
+    );
     await this.emitProgress({
       searchId: history.id,
       keyword: payload.keyword,
@@ -207,7 +225,11 @@ export class CrawlerService {
       pendingSites: [],
       resultCount: history.resultCount,
       totalSites: siteCodes.length,
-      message: '검색 완료',
+      message: rateLimited
+        ? saved > 0
+          ? '일부 사이트 일시 차단 — 잠시 후 재시도 권장'
+          : '사이트 일시 차단 — 2~3분 뒤 다시 검색해 주세요'
+        : '검색 완료',
     });
 
     if (
@@ -267,6 +289,36 @@ export class CrawlerService {
         }`,
       );
     }
+  }
+
+  private toUserFacingSiteError(
+    siteCode: string,
+    parsed: {
+      errorCode: string;
+      responseStatus: number | null;
+      errorMessage: string;
+    },
+  ): string {
+    const siteNames: Record<string, string> = {
+      joonggonara: '중고나라',
+      bungae: '번개장터',
+      karrot: '당근',
+    };
+    const name = siteNames[siteCode] || siteCode;
+    const blocked =
+      parsed.errorCode === 'HTTP_403' ||
+      parsed.errorCode === 'HTTP_429' ||
+      parsed.responseStatus === 403 ||
+      parsed.responseStatus === 429 ||
+      /차단|403|429/i.test(parsed.errorMessage);
+
+    if (blocked) {
+      return `${name}: 일시적으로 차단되었습니다. 2~3분 기다린 뒤 다시 검색해 주세요. 연속 시도 시 차단이 더 길어질 수 있습니다.`;
+    }
+    if (parsed.errorCode === 'TIMEOUT') {
+      return `${name}: 응답 시간이 초과되었습니다. 잠시 후 다시 검색해 주세요.`;
+    }
+    return `${name}: ${parsed.errorMessage}`;
   }
 
   private parseCrawlError(error: unknown): {
