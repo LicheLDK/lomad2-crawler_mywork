@@ -301,9 +301,11 @@ export function ResultDrawer({
                 <div>
                   <dt className="text-xs text-ink-400">등록일</dt>
                   <dd className="mt-0.5 text-ink-800">
-                    {activeRow.createdAt
-                      ? `${formatRelative(activeRow.createdAt)} (${formatTime(activeRow.createdAt)})`
-                      : '—'}
+                    {activeRow.listedAt
+                      ? `${formatRelative(activeRow.listedAt)} (${formatTime(activeRow.listedAt)})`
+                      : activeRow.createdAt
+                        ? `${formatRelative(activeRow.createdAt)} (${formatTime(activeRow.createdAt)}) · 수집일`
+                        : '—'}
                   </dd>
                 </div>
                 <div>

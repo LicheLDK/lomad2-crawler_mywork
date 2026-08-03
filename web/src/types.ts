@@ -16,6 +16,8 @@ export interface SearchResult {
   titleSimilarity?: number | null;
   imageSimilarity?: number | null;
   createdAt?: string;
+  /** 원본 사이트 매물 등록/갱신 시각 */
+  listedAt?: string | null;
   source?: string;
 }
 

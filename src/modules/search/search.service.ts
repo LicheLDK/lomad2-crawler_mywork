@@ -72,6 +72,7 @@ export class SearchService {
             sites,
             status: SearchStatus.CACHED,
             resultCount: cached.length,
+            startedAt: new Date(),
             finishedAt: new Date(),
             requestMeta: { source: 'elastic-cache' },
           }),
@@ -82,9 +83,14 @@ export class SearchService {
 
         return {
           searchId: history.id,
+          keyword: history.keyword,
           status: history.status,
           source: 'cache',
           resultCount: cached.length,
+          sites: history.sites,
+          startedAt: history.startedAt,
+          finishedAt: history.finishedAt,
+          createdAt: history.createdAt,
           results,
         };
       }
@@ -97,15 +103,21 @@ export class SearchService {
             sites,
             status: SearchStatus.COMPLETED,
             resultCount: 0,
+            startedAt: new Date(),
             finishedAt: new Date(),
             requestMeta: { source: 'cache-only-miss' },
           }),
         );
         return {
           searchId: history.id,
+          keyword: history.keyword,
           status: history.status,
           source: 'cache',
           resultCount: 0,
+          sites: history.sites,
+          startedAt: history.startedAt,
+          finishedAt: history.finishedAt,
+          createdAt: history.createdAt,
           results: [],
         };
       }
@@ -404,6 +416,7 @@ export class SearchService {
       matchingReason: link.matchingReason,
       matchingScores: link.matchingScores,
       createdAt: link.createdAt,
+      listedAt: r?.listedAt ?? null,
       screenshotUrl: r?.imageHash?.localPath
         ? `storage/images/${r.id}`
         : null,
@@ -425,6 +438,7 @@ export class SearchService {
       titleSimilarity: r.titleSimilarity,
       imageSimilarity: r.imageSimilarity,
       createdAt: r.createdAt,
+      listedAt: r.listedAt,
       screenshotUrl: r.imageHash?.localPath
         ? `storage/images/${r.id}`
         : null,

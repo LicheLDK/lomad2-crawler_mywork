@@ -11,7 +11,7 @@
     "start:dev:api": "cross-env ENABLE_WORKER=false LOG_APP=api nest start --watch --exec \"node -r tsconfig-paths/register\"",
     "start:prod": "cross-env LOG_APP=api node -r ./dist/register-paths.js dist/main.js",
     "start:worker": "cross-env LOG_APP=worker ENABLE_WORKER=true node -r ./dist/register-paths.js dist/worker.js",
-    "start:worker:dev": "cross-env ENABLE_WORKER=true LOG_APP=worker ts-node -r tsconfig-paths/register src/worker.ts",
+    "start:worker:dev": "cross-env ENABLE_WORKER=true LOG_APP=worker node --watch -r tsconfig-paths/register -r ts-node/register src/worker.ts",
     "retention:cleanup": "cross-env ENABLE_WORKER=false LOG_APP=api ts-node -r tsconfig-paths/register src/retention-cleanup.ts",
     "retention:cleanup:prod": "cross-env ENABLE_WORKER=false LOG_APP=api node -r ./dist/register-paths.js dist/retention-cleanup.js",
     "lint": "eslint .",

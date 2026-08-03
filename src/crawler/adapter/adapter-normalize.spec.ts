@@ -3,8 +3,10 @@ import { BungaeAdapter } from './bungae.adapter';
 import {
   isJunkJoongnaTitle,
   JoonggonaraAdapter,
+  mapJoongnaApiItem,
 } from './joonggonara.adapter';
-import { KarrotAdapter } from './karrot.adapter';
+import { KarrotAdapter, extractFleamarketArticles } from './karrot.adapter';
+import { parseListedAt } from '@/common/utils/listed-at.util';
 
 function mockConfig(): ConfigService {
   return {
@@ -26,6 +28,7 @@ describe('adapter normalize()', () => {
         price: '150000.0',
         location: '서울',
         product_image: 'https://cdn.example/{res}/a.jpg',
+        update_time: 1_700_000_000,
       },
     ]);
 
@@ -36,6 +39,9 @@ describe('adapter normalize()', () => {
       url: 'https://www.bunjang.co.kr/products/12345',
       imageUrl: 'https://cdn.example/400/a.jpg',
     });
+    expect(listing.listedAt?.toISOString()).toBe(
+      new Date(1_700_000_000 * 1000).toISOString(),
+    );
   });
 
   it('번개장터: url/title 없으면 제외', async () => {
@@ -48,6 +54,30 @@ describe('adapter normalize()', () => {
     expect(listings[0].url).toContain('/products/1');
   });
 
+  it('중고나라: API item sortDate → listedAt', async () => {
+    const raw = mapJoongnaApiItem({
+      seq: 224563219,
+      title: '브리온베가 라디오포노그라포 스피커 화이트 색상 삽니다',
+      price: 15000000,
+      url: 'https://img.example/a.jpg',
+      sortDate: '2026-01-26 19:19:02',
+      mainLocationName: '물금읍',
+      locationNames: ['경상남도 양산시 물금읍'],
+    });
+    expect(raw).toMatchObject({
+      href: 'https://web.joongna.com/product/224563219',
+      region: '물금읍',
+      sortDate: '2026-01-26 19:19:02',
+    });
+
+    const adapter = new JoonggonaraAdapter(mockConfig());
+    const [listing] = await adapter.normalize([raw!]);
+    expect(listing.listedAt?.toISOString()).toBe(
+      parseListedAt('2026-01-26 19:19:02')?.toISOString(),
+    );
+    expect(listing.region).toBe('물금읍');
+  });
+
   it('중고나라: priceText 파싱', async () => {
     const adapter = new JoonggonaraAdapter(mockConfig());
     const [listing] = await adapter.normalize([
@@ -58,6 +88,7 @@ describe('adapter normalize()', () => {
         image: 'https://img.example/a.jpg',
         seller: 'seller1',
         region: '경기',
+        sortDate: '2026-01-26 19:19:02',
       },
     ]);
 
@@ -68,6 +99,7 @@ describe('adapter normalize()', () => {
       seller: 'seller1',
       region: '경기',
     });
+    expect(listing.listedAt?.toISOString()).toBe('2026-01-26T10:19:02.000Z');
   });
 
   it('중고나라: isJunkJoongnaTitle 판별', () => {
@@ -144,5 +176,30 @@ describe('adapter normalize()', () => {
       seller: '이웃',
       description: '깨끗함',
     });
+  });
+
+  it('당근: FleamarketArticle createdAt → listedAt', async () => {
+    const html = `
+      <script>
+      [{"id":"/kr/buy-sell/iphone-abc/","href":"https://www.daangn.com/kr/buy-sell/iphone-abc/","price":"1450000.0","title":"아이폰 팝니다","thumbnail":"https://img.example/a.webp?q=82\\u0026s=300x300","status":"Ongoing","content":"상태 좋아요","createdAt":"2026-08-03T12:01:41.123+09:00","boostedAt":"2026-08-03T12:01:41.123+09:00","user":{"dbId":"1","nickname":"톰삭스","__typename":"KarrotUser"},"region":{"dbId":"6128","name":"서초동","__typename":"Region"},"__typename":"FleamarketArticle"}]
+      </script>
+    `;
+    const items = extractFleamarketArticles(html);
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({
+      name: '아이폰 팝니다',
+      url: 'https://www.daangn.com/kr/buy-sell/iphone-abc/',
+      region: '서초동',
+      seller: '톰삭스',
+      createdAt: '2026-08-03T12:01:41.123+09:00',
+    });
+
+    const adapter = new KarrotAdapter(mockConfig());
+    const [listing] = await adapter.normalize(items);
+    expect(listing.listedAt?.toISOString()).toBe(
+      parseListedAt('2026-08-03T12:01:41.123+09:00')?.toISOString(),
+    );
+    expect(listing.region).toBe('서초동');
+    expect(listing.seller).toBe('톰삭스');
   });
 });

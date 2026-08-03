@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SiteCode } from '@/common/constants/site-code';
+import { parseListedAt } from '@/common/utils/listed-at.util';
 import { BaseHttpAdapter } from './base-http.adapter';
 import {
   NormalizedListing,
@@ -15,7 +16,7 @@ import {
 export class BungaeAdapter extends BaseHttpAdapter {
   readonly siteCode = SiteCode.BUNGAE;
   readonly siteName = '번개장터';
-  readonly ADAPTER_VERSION = '1';
+  readonly ADAPTER_VERSION = '2';
 
   constructor(config: ConfigService) {
     super(config);
@@ -51,7 +52,8 @@ export class BungaeAdapter extends BaseHttpAdapter {
       url: pid ? `https://www.bunjang.co.kr/products/${pid}` : '',
       imageUrl,
       description: null,
-      listedAt: null,
+      // find_v2: update_time = 유닉스 초 (끌어올리기 반영 시각)
+      listedAt: parseListedAt(item.update_time ?? item.create_time),
       raw: item,
     };
   }

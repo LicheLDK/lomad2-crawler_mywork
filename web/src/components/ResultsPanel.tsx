@@ -5,6 +5,7 @@ import { resolveAssetUrl } from '../api';
 import {
   formatPrice,
   formatRelative,
+  formatTime,
   siteLabel,
   siteTone,
   statusLabel,
@@ -62,10 +63,9 @@ function sortResults(rows: SearchResult[], sort: SortKey, siteFilter: string) {
       return pb - pa;
     }
     if (sort === 'date') {
-      return (
-        new Date(b.createdAt || 0).getTime() -
-        new Date(a.createdAt || 0).getTime()
-      );
+      const dateOf = (r: SearchResult) =>
+        new Date(r.listedAt || r.createdAt || 0).getTime();
+      return dateOf(b) - dateOf(a);
     }
     return siteLabel(a.siteCode).localeCompare(siteLabel(b.siteCode), 'ko');
   });
@@ -143,19 +143,15 @@ export function ResultsPanel({
     const end = detail.finishedAt;
     let searchTime = '—';
     if (start) {
-      const t0 = new Date(start).getTime();
-      const t1 = end ? new Date(end).getTime() : Date.now();
-      if (Number.isFinite(t0) && Number.isFinite(t1) && t1 >= t0) {
-        const sec = (t1 - t0) / 1000;
-        if (sec < 60) {
-          searchTime = `${sec.toFixed(1)}초`;
-        } else {
-          const m = Math.floor(sec / 60);
-          const s = (sec % 60).toFixed(1);
-          searchTime = `${m}분 ${s}초`;
-        }
-        if (!end && inFlight) searchTime = `${searchTime} (진행중)`;
+      // 검색이 수행된 시각 (소요시간이 아님)
+      searchTime = end
+        ? formatTime(end)
+        : formatRelative(start);
+      if (!end && inFlight) {
+        searchTime = `${formatRelative(start)} (진행중)`;
       }
+    } else if (end) {
+      searchTime = formatTime(end);
     }
 
     return {
@@ -390,7 +386,7 @@ export function ResultsPanel({
                     {formatPrice(row.price)}
                   </span>
                   <span className="text-xs text-ink-500">
-                    {formatRelative(row.createdAt)}
+                    {formatRelative(row.listedAt || row.createdAt)}
                   </span>
                 </div>
 

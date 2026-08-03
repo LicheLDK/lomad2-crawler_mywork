@@ -367,6 +367,9 @@ export class CrawlerService {
       if (listing.description != null) {
         existing.description = listing.description;
       }
+      if (listing.listedAt) {
+        existing.listedAt = listing.listedAt;
+      }
       existing.titleSimilarity = titleSim;
 
       if (payload.referenceImageHash && existing.imageHash?.phash) {
