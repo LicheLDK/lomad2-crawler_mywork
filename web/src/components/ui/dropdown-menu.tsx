@@ -1,6 +1,7 @@
 import {
   useEffect,
   useId,
+  useLayoutEffect,
   useRef,
   useState,
   type ReactNode,
@@ -17,8 +18,42 @@ export type DropdownMenuItem = {
   icon?: ReactNode;
 };
 
+const MENU_WIDTH = 180;
+const VIEWPORT_PAD = 8;
+const GAP = 6;
+
+function placeMenu(
+  trigger: DOMRect,
+  menuSize: { width: number; height: number },
+  align: 'start' | 'end',
+) {
+  const width = Math.max(menuSize.width, MENU_WIDTH);
+  const height = menuSize.height;
+  let left =
+    align === 'end'
+      ? Math.min(trigger.right - width, window.innerWidth - width - VIEWPORT_PAD)
+      : Math.max(VIEWPORT_PAD, trigger.left);
+  left = Math.max(
+    VIEWPORT_PAD,
+    Math.min(left, window.innerWidth - width - VIEWPORT_PAD),
+  );
+
+  const spaceBelow = window.innerHeight - trigger.bottom - VIEWPORT_PAD;
+  const spaceAbove = trigger.top - VIEWPORT_PAD;
+  const openUp = spaceBelow < height && spaceAbove > spaceBelow;
+
+  let top = openUp ? trigger.top - height - GAP : trigger.bottom + GAP;
+  top = Math.max(
+    VIEWPORT_PAD,
+    Math.min(top, window.innerHeight - height - VIEWPORT_PAD),
+  );
+
+  return { top, left };
+}
+
 /**
  * 경량 Dropdown Menu — More(⋯) 액션용
+ * 뷰포트 밖으로 나가면 위/아래로 뒤집어 붙인다.
  */
 export function DropdownMenu({
   trigger,
@@ -46,17 +81,26 @@ export function DropdownMenu({
     const el = triggerRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
-    const width = 180;
-    const left =
-      align === 'end'
-        ? Math.min(rect.right - width, window.innerWidth - width - 8)
-        : Math.max(8, rect.left);
-    setCoords({
-      top: rect.bottom + 6,
-      left: Math.max(8, left),
-    });
+    // 실제 높이 측정 전 추정 배치 (아이템당 ~36px + padding)
+    const estimatedHeight = items.length * 36 + 8;
+    setCoords(
+      placeMenu(rect, { width: MENU_WIDTH, height: estimatedHeight }, align),
+    );
     setOpen(true);
   }
+
+  useLayoutEffect(() => {
+    if (!open || !menuRef.current || !triggerRef.current) return;
+    const trigger = triggerRef.current.getBoundingClientRect();
+    const menu = menuRef.current.getBoundingClientRect();
+    setCoords(
+      placeMenu(
+        trigger,
+        { width: menu.width, height: menu.height },
+        align,
+      ),
+    );
+  }, [open, align, items.length]);
 
   useEffect(() => {
     if (!open) return;
@@ -69,13 +113,29 @@ export function DropdownMenu({
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setOpen(false);
     };
+    const onReposition = () => {
+      if (!triggerRef.current || !menuRef.current) return;
+      const trigger = triggerRef.current.getBoundingClientRect();
+      const menu = menuRef.current.getBoundingClientRect();
+      setCoords(
+        placeMenu(
+          trigger,
+          { width: menu.width, height: menu.height },
+          align,
+        ),
+      );
+    };
     window.addEventListener('mousedown', onPointer);
     window.addEventListener('keydown', onKey);
+    window.addEventListener('resize', onReposition);
+    window.addEventListener('scroll', onReposition, true);
     return () => {
       window.removeEventListener('mousedown', onPointer);
       window.removeEventListener('keydown', onKey);
+      window.removeEventListener('resize', onReposition);
+      window.removeEventListener('scroll', onReposition, true);
     };
-  }, [open]);
+  }, [open, align]);
 
   useEffect(() => {
     if (!open) return;
