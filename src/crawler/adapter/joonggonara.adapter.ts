@@ -2,6 +2,11 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Page } from 'playwright';
 import { SiteCode } from '@/common/constants/site-code';
+import {
+  isNationwideRegions,
+  regionMatchesPresets,
+  resolveSearchRegions,
+} from '@/common/constants/search-region';
 import { parseListedAt } from '@/common/utils/listed-at.util';
 import { sleep } from '@/common/utils/string.util';
 import {
@@ -90,7 +95,7 @@ export function mapJoongnaApiItem(
 export class JoonggonaraAdapter extends BasePlaywrightAdapter {
   readonly siteCode = SiteCode.JOONGGONARA;
   readonly siteName = '중고나라';
-  readonly ADAPTER_VERSION = '4';
+  readonly ADAPTER_VERSION = '5';
 
   constructor(config: ConfigService) {
     super(config);
@@ -109,10 +114,17 @@ export class JoonggonaraAdapter extends BasePlaywrightAdapter {
     try {
       const apiItems = await this.fetchSearchApi(options);
       if (apiItems.length > 0) {
+        let listings = await this.normalize(apiItems);
+        if (!isNationwideRegions(options.regions)) {
+          const presets = resolveSearchRegions(options.regions);
+          listings = listings.filter((l) =>
+            regionMatchesPresets(l.region, presets),
+          );
+        }
         this.logger.log(
-          `[${this.siteCode}] search-api hit n=${apiItems.length}`,
+          `[${this.siteCode}] search-api hit n=${listings.length}`,
         );
-        return this.normalize(apiItems.slice(0, max));
+        return listings.slice(0, max);
       }
       this.logger.warn(
         `[${this.siteCode}] search-api empty — Playwright fallback`,
@@ -124,13 +136,23 @@ export class JoonggonaraAdapter extends BasePlaywrightAdapter {
         }`,
       );
     }
-    return super.crawl(options);
+    const fallback = await super.crawl(options);
+    if (!isNationwideRegions(options.regions)) {
+      const presets = resolveSearchRegions(options.regions);
+      return fallback
+        .filter((l) => regionMatchesPresets(l.region, presets))
+        .slice(0, max);
+    }
+    return fallback.slice(0, max);
   }
 
   private async fetchSearchApi(
     options: SearchAdapterOptions,
   ): Promise<Record<string, unknown>[]> {
-    const size = Math.max(options.maxResults ?? 20, 20);
+    const nationwide = isNationwideRegions(options.regions);
+    const size = nationwide
+      ? Math.max(options.maxResults ?? 20, 20)
+      : Math.min(100, Math.max(40, (options.maxResults ?? 20) * 5));
     // page 는 0-based. searchWord 가 키워드 파라미터.
     const url = 'https://search-api.joongna.com/v3/search/all';
     const body = {

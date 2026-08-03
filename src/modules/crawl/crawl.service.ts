@@ -27,7 +27,10 @@ export class CrawlService {
         externalProductId: dto.externalProductId ?? null,
         sites,
         status: SearchStatus.QUEUED,
-        requestMeta: { forceCrawl: true },
+        requestMeta: {
+          forceCrawl: true,
+          regions: dto.regions ?? ['all'],
+        },
       }),
     );
 
@@ -37,6 +40,7 @@ export class CrawlService {
         keyword: dto.keyword,
         sites,
         maxResultsPerSite: dto.maxResultsPerSite ?? 20,
+        regions: dto.regions ?? ['all'],
       },
       { priority: 1 },
     );

@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Search, RefreshCw } from 'lucide-react';
 import type { SiteCode } from '../types';
+import {
+  SEARCH_REGION_OPTIONS,
+  type SearchRegionCode,
+} from '../lib/search-regions';
 
 const SITES: { code: SiteCode; label: string }[] = [
   { code: 'joonggonara', label: '중고나라' },
@@ -21,6 +25,7 @@ export function SearchToolbar({
     sites: SiteCode[];
     maxResultsPerSite: number;
     forceCrawl: boolean;
+    regions: SearchRegionCode[];
   }) => void;
 }) {
   const [keyword, setKeyword] = useState(keywordProp?.trim() || '');
@@ -29,8 +34,11 @@ export function SearchToolbar({
     'bungae',
     'karrot',
   ]);
+  const [regions, setRegions] = useState<SearchRegionCode[]>(['all']);
   const [maxResults, setMaxResults] = useState(10);
   const [forceCrawl, setForceCrawl] = useState(false);
+
+  const isNationwide = regions.includes('all') || regions.length === 0;
 
   useEffect(() => {
     if (keywordProp != null && keywordProp.trim()) {
@@ -44,6 +52,21 @@ export function SearchToolbar({
     );
   }
 
+  function toggleRegion(code: SearchRegionCode) {
+    if (code === 'all') {
+      setRegions(['all']);
+      return;
+    }
+    setRegions((prev) => {
+      const withoutAll = prev.filter((c) => c !== 'all');
+      if (withoutAll.includes(code)) {
+        const next = withoutAll.filter((c) => c !== code);
+        return next.length === 0 ? (['all'] as SearchRegionCode[]) : next;
+      }
+      return [...withoutAll, code];
+    });
+  }
+
   return (
     <form
       className="rounded-2xl border border-ink-100/80 bg-white/75 p-4 shadow-soft backdrop-blur sm:p-5"
@@ -55,6 +78,7 @@ export function SearchToolbar({
           sites,
           maxResultsPerSite: maxResults,
           forceCrawl,
+          regions: isNationwide ? ['all'] : regions,
         });
       }}
     >
@@ -134,6 +158,38 @@ export function SearchToolbar({
             className="w-16 rounded-lg border border-ink-100 bg-sand-50 px-2 py-1 outline-none focus:border-teal-600"
           />
         </label>
+      </div>
+
+      <div className="mt-3">
+        <div className="mb-1.5 flex items-baseline gap-2">
+          <span className="text-sm text-ink-500">지역</span>
+          <span className="text-xs text-ink-400">
+            중고나라·번개·당근 공통 · 당근은 동네 순회라 광역 검색이 더 길고, 연속
+            강제크롤 시 일시 차단될 수 있음
+          </span>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {SEARCH_REGION_OPTIONS.map((opt) => {
+            const on =
+              opt.code === 'all'
+                ? isNationwide
+                : !isNationwide && regions.includes(opt.code);
+            return (
+              <button
+                key={opt.code}
+                type="button"
+                onClick={() => toggleRegion(opt.code)}
+                className={`rounded-lg px-2.5 py-1 text-xs font-medium transition ${
+                  on
+                    ? 'bg-teal-700 text-white'
+                    : 'border border-ink-100 bg-sand-50 text-ink-700 hover:border-teal-600/40'
+                }`}
+              >
+                {opt.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
     </form>
   );

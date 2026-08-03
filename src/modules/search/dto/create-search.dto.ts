@@ -44,6 +44,17 @@ export class CreateSearchDto {
   maxResultsPerSite?: number;
 
   @ApiPropertyOptional({
+    description:
+      "검색 광역 지역 코드. 'all' 또는 생략 시 전체. 예: seoul, gyeonggi, incheon",
+    example: ['all'],
+    type: [String],
+  })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  regions?: string[];
+
+  @ApiPropertyOptional({
     description: '참고 이미지 URL (유사도 계산용)',
   })
   @IsOptional()

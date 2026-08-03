@@ -16,6 +16,7 @@ import { QueryResultDto } from './dto/query-result.dto';
 import { ElasticService } from '@/elastic/elastic.service';
 import { CrawlQueueService } from '@/queue/crawl-queue.service';
 import { normalizeKeyword } from '@/common/utils/string.util';
+import { isNationwideRegions } from '@/common/constants/search-region';
 import { SiteCode } from '@/common/constants/site-code';
 import { CacheService } from '@/modules/cache/cache.service';
 import { ImageStorageService } from '@/storage/image-storage.service';
@@ -53,7 +54,9 @@ export class SearchService {
       dto.sites?.length && dto.sites.length > 0
         ? dto.sites
         : [...SiteCode.ALL];
-    const useCache = dto.useCache !== false;
+    const regions = dto.regions?.length ? dto.regions : ['all'];
+    // 지역 필터 결과는 Elastic 키워드 캐시와 범위가 달라 전국일 때만 캐시 사용
+    const useCache = dto.useCache !== false && isNationwideRegions(regions);
 
     await this.upsertKeyword(keyword);
 
@@ -74,7 +77,7 @@ export class SearchService {
             resultCount: cached.length,
             startedAt: new Date(),
             finishedAt: new Date(),
-            requestMeta: { source: 'elastic-cache' },
+            requestMeta: { source: 'elastic-cache', regions },
           }),
         );
 
@@ -143,6 +146,7 @@ export class SearchService {
         requestMeta: {
           maxResultsPerSite: dto.maxResultsPerSite ?? 20,
           referenceImageUrl: dto.referenceImageUrl,
+          regions,
         },
       }),
     );
@@ -152,6 +156,7 @@ export class SearchService {
       keyword: dto.keyword,
       sites,
       maxResultsPerSite: dto.maxResultsPerSite ?? 20,
+      regions,
       referenceImageUrl: dto.referenceImageUrl,
       referenceImageHash,
     });

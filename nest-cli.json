@@ -8,6 +8,10 @@
       {
         "include": "ai/prompt/templates/**/*",
         "watchAssets": true
+      },
+      {
+        "include": "common/constants/karrot-region-ins.json",
+        "watchAssets": true
       }
     ]
   }

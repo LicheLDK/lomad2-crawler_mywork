@@ -1,7 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SiteCode } from '@/common/constants/site-code';
+import { resolveKarrotIns } from '@/common/constants/search-region';
 import { parseListedAt } from '@/common/utils/listed-at.util';
+import { selectTopByTitleSimilarity, sleep } from '@/common/utils/string.util';
+import {
+  CrawlAdapterError,
+} from './crawl-adapter.error';
 import { BaseHttpAdapter } from './base-http.adapter';
 import {
   NormalizedListing,
@@ -143,7 +148,9 @@ function findFleamarketObject(
 
 /**
  * 당근(Karrot) Adapter
- * - /search/{q} 는 구식 → /kr/buy-sell/?search=
+ * - /search/{q} 는 구식 → /kr/buy-sell/?in=동네&search=
+ * - 시·도/시 단위 in= 은 반경 제한으로 누락 → 읍·면 위주 다중 크롤
+ * - 과도한 병렬 호출 시 403 차단 → 낮은 동시성 + 백오프
  * - 1순위: HTML 내 FleamarketArticle (createdAt·region 포함)
  * - 2순위: JSON-LD ItemList
  */
@@ -151,23 +158,148 @@ function findFleamarketObject(
 export class KarrotAdapter extends BaseHttpAdapter {
   readonly siteCode = SiteCode.KARROT;
   readonly siteName = '당근';
-  readonly ADAPTER_VERSION = '2';
+  readonly ADAPTER_VERSION = '6';
 
   constructor(config: ConfigService) {
     super(config);
   }
 
-  buildSearchUrl(options: SearchAdapterOptions): string {
+  buildSearchUrl(options: SearchAdapterOptions & { karrotIn?: string }): string {
     const q = encodeURIComponent(options.keyword);
+    const karrotIn =
+      options.karrotIn || resolveKarrotIns(options.regions)[0];
+    if (karrotIn) {
+      return `https://www.daangn.com/kr/buy-sell/?in=${encodeURIComponent(karrotIn)}&search=${q}`;
+    }
     return `https://www.daangn.com/kr/buy-sell/?search=${q}`;
+  }
+
+  /**
+   * 동네 in= 순차/소량 병렬 수집 → URL 합친 뒤 유사도 상위 후보 반환.
+   * 최종 maxKeep 재선별은 crawler.service 에서 한 번 더 한다.
+   */
+  override async crawl(
+    options: SearchAdapterOptions,
+  ): Promise<NormalizedListing[]> {
+    const max = options.maxResults ?? 20;
+    const targets = shuffle(resolveKarrotIns(options.regions));
+    const merged: NormalizedListing[] = [];
+    const seen = new Set<string>();
+
+    let concurrency = 2;
+    const baseDelayMs = Math.max(
+      this.config.get<number>('crawler.requestDelayMs') || 500,
+      500,
+    );
+    let delayMs = baseDelayMs;
+    let consecutiveForbidden = 0;
+    let forbiddenCount = 0;
+    let successCount = 0;
+    let aborted = false;
+
+    for (let i = 0; i < targets.length; i += concurrency) {
+      if (aborted) break;
+
+      const batch = targets.slice(i, i + concurrency);
+      const lists = await Promise.all(
+        batch.map(async (karrotIn) => {
+          try {
+            const raw = await this.fetchText(
+              this.buildSearchUrl({
+                keyword: options.keyword,
+                karrotIn,
+              }),
+            );
+            const items = await this.parse(raw);
+            return { ok: true as const, items: await this.normalize(items) };
+          } catch (error) {
+            const status =
+              error instanceof CrawlAdapterError
+                ? error.responseStatus
+                : null;
+            return {
+              ok: false as const,
+              status,
+              message:
+                error instanceof Error ? error.message : String(error),
+              karrotIn,
+            };
+          }
+        }),
+      );
+
+      for (const result of lists) {
+        if (result.ok) {
+          consecutiveForbidden = 0;
+          successCount += 1;
+          for (const item of result.items) {
+            if (seen.has(item.url)) continue;
+            seen.add(item.url);
+            merged.push(item);
+          }
+          continue;
+        }
+
+        if (result.status === 403 || result.status === 429) {
+          forbiddenCount += 1;
+          consecutiveForbidden += 1;
+        } else {
+          consecutiveForbidden = 0;
+          this.logger.warn(
+            `[${this.siteCode}] in=${result.karrotIn} failed: ${result.message}`,
+          );
+        }
+      }
+
+      if (consecutiveForbidden >= 4) {
+        concurrency = 1;
+        delayMs = Math.min(delayMs * 2, 8000);
+        this.logger.warn(
+          `[${this.siteCode}] rate-limited (403/429) — backoff ${delayMs}ms, concurrency=1`,
+        );
+        await sleep(delayMs);
+      }
+
+      // 연속 차단이 길면 부분 결과로 조기 종료 (추가 차단·빈 결과 악화 방지)
+      if (consecutiveForbidden >= 10) {
+        aborted = true;
+        this.logger.warn(
+          `[${this.siteCode}] abort remaining targets after repeated 403/429 (have=${merged.length})`,
+        );
+        break;
+      }
+
+      if (i + concurrency < targets.length && !aborted) {
+        await sleep(delayMs);
+      }
+    }
+
+    this.logger.log(
+      `[${this.siteCode}] multi-region n=${merged.length} targets=${targets.length} ok=${successCount} forbidden=${forbiddenCount} aborted=${aborted}`,
+    );
+
+    if (merged.length === 0 && forbiddenCount > 0 && successCount === 0) {
+      throw new CrawlAdapterError({
+        message:
+          '당근에서 일시적으로 검색을 차단했습니다. 2~3분 기다린 뒤 다시 검색해 주세요. 연속으로 시도하면 차단이 더 길어질 수 있습니다.',
+        errorCode: 'HTTP_403',
+        responseStatus: 403,
+      });
+    }
+
+    if (aborted && merged.length > 0) {
+      this.logger.warn(
+        `[${this.siteCode}] partial due to rate-limit have=${merged.length} forbidden=${forbiddenCount}`,
+      );
+    }
+
+    // 최신순이 아니라 제목 유사도 우선으로 후보를 남긴다
+    return selectTopByTitleSimilarity(options.keyword, merged, max);
   }
 
   async parse(raw: string): Promise<Record<string, unknown>[]> {
     const fromEmbed = extractFleamarketArticles(raw);
     if (fromEmbed.length > 0) {
-      this.logger.log(
-        `[${this.siteCode}] FleamarketArticle hit n=${fromEmbed.length}`,
-      );
       return fromEmbed;
     }
 
@@ -212,7 +344,6 @@ export class KarrotAdapter extends BaseHttpAdapter {
       }
     }
 
-    this.logger.warn(`[${this.siteCode}] FleamarketArticle/JSON-LD not found`);
     return [];
   }
 
@@ -229,4 +360,13 @@ export class KarrotAdapter extends BaseHttpAdapter {
       raw: item,
     };
   }
+}
+
+function shuffle<T>(items: T[]): T[] {
+  const arr = [...items];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
 }

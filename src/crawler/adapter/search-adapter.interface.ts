@@ -14,6 +14,11 @@ export interface SearchAdapterOptions {
   keyword: string;
   maxResults?: number;
   page?: number;
+  /**
+   * 광역 지역 코드 (seoul, gyeonggi, …).
+   * 비어 있거나 'all' 포함 시 전체 광역.
+   */
+  regions?: string[];
 }
 
 export interface SearchAdapter {
