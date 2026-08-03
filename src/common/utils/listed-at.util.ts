@@ -32,20 +32,14 @@ export function parseListedAt(
     return fromUnixEpoch(Number(raw));
   }
 
-  const isoish = raw.includes('T')
-    ? raw
-    : raw.replace(/^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2})/, '$1T$2');
-  const parsed = Date.parse(isoish);
-  if (Number.isFinite(parsed)) {
-    // "YYYY-MM-DD HH:mm:ss" 는 KST로 해석 (사이트 표기 기준)
-    if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(raw)) {
-      return fromKstWallClock(raw);
-    }
-    return new Date(parsed);
-  }
-
+  // 명시적 포맷은 Date.parse 보다 먼저 처리.
+  // V8(UTC)은 "2026.01.26" 을 local midnight 로 파싱해 KST 해석을 건너뛴다.
   const relative = parseKoreanRelative(raw, now);
   if (relative) return relative;
+
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(raw)) {
+    return fromKstWallClock(raw);
+  }
 
   const dotted = raw.match(DOT_DATE_RE);
   if (dotted) {
@@ -60,6 +54,14 @@ export function parseListedAt(
     const m = Number(md[1]);
     const d = Number(md[2]);
     return fromKstYmd(now.getFullYear(), m, d);
+  }
+
+  const isoish = raw.includes('T')
+    ? raw
+    : raw.replace(/^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2})/, '$1T$2');
+  const parsed = Date.parse(isoish);
+  if (Number.isFinite(parsed)) {
+    return new Date(parsed);
   }
 
   return null;
