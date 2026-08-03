@@ -1,5 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 export default {
+  darkMode: ['selector', '[data-theme="dark"]'],
   content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
   theme: {
     extend: {
@@ -21,11 +22,18 @@ export default {
           50: '#f7f5f1',
           100: '#efeae2',
           200: '#e0d8cc',
+          // Warm dark surfaces (not pure slate)
+          dark: {
+            900: '#17140f',
+            800: '#211c15',
+            700: '#2a241c',
+          },
         },
         teal: {
           700: '#0f766e',
           600: '#0d9488',
           500: '#14b8a6',
+          400: '#2dd4bf',
           50: '#f0fdfa',
         },
         brick: {
@@ -34,11 +42,31 @@ export default {
         },
       },
       fontFamily: {
-        display: ['"Fraunces"', 'Georgia', 'serif'],
-        sans: ['"IBM Plex Sans"', 'system-ui', 'sans-serif'],
+        display: [
+          '"Pretendard Variable"',
+          'Pretendard',
+          '-apple-system',
+          '"Apple SD Gothic Neo"',
+          '"Malgun Gothic"',
+          'system-ui',
+          'sans-serif',
+        ],
+        sans: [
+          '"Pretendard Variable"',
+          'Pretendard',
+          '-apple-system',
+          '"Apple SD Gothic Neo"',
+          '"Malgun Gothic"',
+          'system-ui',
+          'sans-serif',
+        ],
       },
       boxShadow: {
-        soft: '0 1px 0 rgba(15, 23, 42, 0.04), 0 12px 32px -16px rgba(15, 23, 42, 0.18)',
+        // shadow-soft ≡ shadow-1 (resting). Prefer shadow-1/2/3 for new UI.
+        soft: '0 1px 0 rgba(15, 23, 42, 0.04), 0 8px 20px -14px rgba(15, 23, 42, 0.16)',
+        1: '0 1px 0 rgba(15, 23, 42, 0.04), 0 8px 20px -14px rgba(15, 23, 42, 0.16)',
+        2: '0 2px 0 rgba(15, 23, 42, 0.05), 0 20px 36px -18px rgba(15, 23, 42, 0.26)',
+        3: '0 30px 70px -24px rgba(15, 23, 42, 0.38)',
       },
       backgroundImage: {
         'app-grid':
@@ -57,11 +85,16 @@ export default {
           '0%, 100%': { opacity: '1' },
           '50%': { opacity: '0.55' },
         },
+        shimmer: {
+          '0%': { backgroundPosition: '200% 0' },
+          '100%': { backgroundPosition: '-200% 0' },
+        },
       },
       animation: {
         fadeUp: 'fadeUp 0.45s ease-out both',
         fadeOutSoft: 'fadeOutSoft 0.4s ease-in both',
         pulseSoft: 'pulseSoft 1.6s ease-in-out infinite',
+        shimmer: 'shimmer 1.6s ease-in-out infinite',
       },
     },
   },

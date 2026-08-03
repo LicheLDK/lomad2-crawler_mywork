@@ -236,7 +236,7 @@ export function ResultsPanel({
           <p className="text-xs font-medium uppercase tracking-[0.14em] text-ink-500">
             Summary
           </p>
-          <p className="mt-2 font-display text-xl text-ink-900">
+          <p className="mt-2 font-display text-xl tabular-nums text-ink-900">
             총 {summary.total}건
           </p>
           {summary.bySite.length > 0 ? (

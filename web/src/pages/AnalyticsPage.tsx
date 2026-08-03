@@ -4,8 +4,11 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  Cell,
   Line,
   LineChart,
+  Pie,
+  PieChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -23,6 +26,7 @@ const TEAL = '#0f766e';
 const INK = '#141c2e';
 const MUTED = '#94a3b8';
 const SAND = '#efeae2';
+const SITE_COLORS = ['#0f766e', '#0d9488', '#14b8a6', '#475569', '#94a3b8'];
 
 function Panel({
   eyebrow,
@@ -199,6 +203,27 @@ export function AnalyticsPage({ stats }: { stats: StatsOverview | null }) {
     [stats],
   );
 
+  /** AI 기간 비교 — summary의 today / month 버킷만 사용 (일별 시계열 API 없음) */
+  const aiPeriodData = useMemo(() => {
+    if (!aiSummary) return [];
+    return [
+      {
+        name: '오늘',
+        label: aiSummary.today.date,
+        calls: aiSummary.today.callCount,
+        success: aiSummary.today.successCount,
+        failure: aiSummary.today.failureCount,
+      },
+      {
+        name: '월간',
+        label: aiSummary.month.yearMonth,
+        calls: aiSummary.month.callCount,
+        success: aiSummary.month.successCount,
+        failure: aiSummary.month.failureCount,
+      },
+    ];
+  }, [aiSummary]);
+
   if (!stats) {
     return (
       <div className="animate-fadeUp rounded-2xl border border-ink-100/80 bg-white/60 px-6 py-16 text-center shadow-soft">
@@ -253,6 +278,69 @@ export function AnalyticsPage({ stats }: { stats: StatsOverview | null }) {
             <StatusBarChart data={searchStatusData} barFill={TEAL} />
           )}
         </Panel>
+
+        <Panel eyebrow="Search · trend" title="일별 검색량">
+          <p className="mb-3 text-sm text-ink-500">
+            최근 14일 · GET /stats → searchTrend
+          </p>
+          {trendData.length === 0 ? (
+            <p className="text-sm text-ink-500">추세 데이터가 없습니다.</p>
+          ) : (
+            <div className="h-72">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={trendData}
+                  margin={{ top: 8, right: 12, left: 0, bottom: 0 }}
+                >
+                  <CartesianGrid
+                    stroke={SAND}
+                    strokeDasharray="3 3"
+                    vertical={false}
+                  />
+                  <XAxis
+                    dataKey="label"
+                    tick={{ fill: MUTED, fontSize: 11 }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    allowDecimals={false}
+                    tick={{ fill: MUTED, fontSize: 12 }}
+                    axisLine={false}
+                    tickLine={false}
+                    width={36}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      borderRadius: 12,
+                      border: '1px solid #e2e8f0',
+                      fontSize: 13,
+                    }}
+                    labelFormatter={(_, payload) =>
+                      (payload?.[0]?.payload as { day?: string })?.day ?? ''
+                    }
+                  />
+                  <Bar
+                    dataKey="searches"
+                    name="검색"
+                    fill={TEAL}
+                    radius={[6, 6, 0, 0]}
+                  />
+                  <Bar
+                    dataKey="results"
+                    name="결과"
+                    fill={INK}
+                    radius={[6, 6, 0, 0]}
+                    opacity={0.55}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+          <p className="mt-2 text-[11px] text-ink-400">
+            teal 검색 · ink 결과
+          </p>
+        </Panel>
       </div>
 
       <div className="grid gap-5 lg:grid-cols-2">
@@ -267,36 +355,104 @@ export function AnalyticsPage({ stats }: { stats: StatsOverview | null }) {
             {siteData.length === 0 ? (
               <p className="text-sm text-ink-500">아직 저장된 결과가 없습니다.</p>
             ) : (
-              <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={siteData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                    <CartesianGrid stroke={SAND} strokeDasharray="3 3" vertical={false} />
-                    <XAxis
-                      dataKey="name"
-                      tick={{ fill: MUTED, fontSize: 12 }}
-                      axisLine={false}
-                      tickLine={false}
-                    />
-                    <YAxis
-                      allowDecimals={false}
-                      tick={{ fill: MUTED, fontSize: 12 }}
-                      axisLine={false}
-                      tickLine={false}
-                      width={36}
-                    />
-                    <Tooltip
-                      cursor={{ fill: 'rgba(15, 118, 110, 0.06)' }}
-                      contentStyle={{
-                        borderRadius: 12,
-                        border: '1px solid #e2e8f0',
-                        fontSize: 13,
-                      }}
-                    />
-                    <Bar dataKey="count" name="결과" fill={TEAL} radius={[8, 8, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="h-56">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={siteData}
+                        dataKey="count"
+                        nameKey="name"
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={48}
+                        outerRadius={72}
+                        paddingAngle={2}
+                        stroke="none"
+                      >
+                        {siteData.map((_, i) => (
+                          <Cell
+                            key={siteData[i].name}
+                            fill={SITE_COLORS[i % SITE_COLORS.length]}
+                          />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        formatter={(value) => [
+                          Number(value ?? 0).toLocaleString(),
+                          '결과',
+                        ]}
+                        contentStyle={{
+                          borderRadius: 12,
+                          border: '1px solid #e2e8f0',
+                          fontSize: 13,
+                        }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="h-56">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={siteData}
+                      layout="vertical"
+                      margin={{ top: 8, right: 16, left: 8, bottom: 0 }}
+                    >
+                      <CartesianGrid
+                        stroke={SAND}
+                        strokeDasharray="3 3"
+                        horizontal={false}
+                      />
+                      <XAxis
+                        type="number"
+                        allowDecimals={false}
+                        tick={{ fill: MUTED, fontSize: 12 }}
+                        axisLine={false}
+                        tickLine={false}
+                      />
+                      <YAxis
+                        type="category"
+                        dataKey="name"
+                        width={72}
+                        tick={{ fill: INK, fontSize: 12 }}
+                        axisLine={false}
+                        tickLine={false}
+                      />
+                      <Tooltip
+                        cursor={{ fill: 'rgba(15, 118, 110, 0.06)' }}
+                        contentStyle={{
+                          borderRadius: 12,
+                          border: '1px solid #e2e8f0',
+                          fontSize: 13,
+                        }}
+                      />
+                      <Bar
+                        dataKey="count"
+                        name="결과"
+                        fill={TEAL}
+                        radius={[0, 8, 8, 0]}
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
               </div>
             )}
+            {siteData.length > 0 ? (
+              <ul className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-600">
+                {siteData.map((row, i) => (
+                  <li key={row.name} className="inline-flex items-center gap-1.5">
+                    <span
+                      className="h-2 w-2 rounded-full"
+                      style={{
+                        background: SITE_COLORS[i % SITE_COLORS.length],
+                      }}
+                    />
+                    {row.name}{' '}
+                    <span className="tabular-nums text-ink-800">{row.count}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
 
             <div className="mt-6 border-t border-ink-100/80 pt-5">
               <p className="mb-3 text-sm text-ink-500">
@@ -385,6 +541,71 @@ export function AnalyticsPage({ stats }: { stats: StatsOverview | null }) {
                     hint={`${formatUsd(aiSummary.month.costUsd)} · ${aiSummary.month.yearMonth}`}
                   />
                 </div>
+
+                <p className="mb-2 text-xs font-medium text-ink-600">
+                  기간별 호출 수 · today / month
+                </p>
+                <div className="mb-5 h-48">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart
+                      data={aiPeriodData}
+                      margin={{ top: 8, right: 12, left: 0, bottom: 0 }}
+                    >
+                      <CartesianGrid
+                        stroke={SAND}
+                        strokeDasharray="3 3"
+                        vertical={false}
+                      />
+                      <XAxis
+                        dataKey="name"
+                        tick={{ fill: MUTED, fontSize: 12 }}
+                        axisLine={false}
+                        tickLine={false}
+                      />
+                      <YAxis
+                        allowDecimals={false}
+                        tick={{ fill: MUTED, fontSize: 12 }}
+                        axisLine={false}
+                        tickLine={false}
+                        width={36}
+                      />
+                      <Tooltip
+                        labelFormatter={(_, payload) =>
+                          (payload?.[0]?.payload as { label?: string })?.label ??
+                          ''
+                        }
+                        contentStyle={{
+                          borderRadius: 12,
+                          border: '1px solid #e2e8f0',
+                          fontSize: 13,
+                        }}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="calls"
+                        name="호출"
+                        stroke={TEAL}
+                        strokeWidth={2.5}
+                        dot={{ r: 4, fill: TEAL }}
+                        activeDot={{ r: 5 }}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="success"
+                        name="성공"
+                        stroke={INK}
+                        strokeWidth={2}
+                        strokeDasharray="4 4"
+                        dot={{ r: 3 }}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+                <p className="mb-4 text-[11px] text-ink-400">
+                  일별 시계열 API가 없어 summary의 오늘·월간 버킷으로 표시합니다.
+                  월간은 누적값입니다.
+                </p>
+
                 {providerData.length === 0 ? (
                   <p className="text-sm text-ink-500">
                     이번 달 Provider별 사용 기록이 없습니다.
@@ -480,63 +701,6 @@ export function AnalyticsPage({ stats }: { stats: StatsOverview | null }) {
           )}
         </Panel>
       </div>
-
-      <Panel eyebrow="Trend" title="검색 추세">
-        {trendData.length === 0 ? (
-          <p className="text-sm text-ink-500">추세 데이터가 없습니다.</p>
-        ) : (
-          <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={trendData} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
-                <CartesianGrid stroke={SAND} strokeDasharray="3 3" vertical={false} />
-                <XAxis
-                  dataKey="label"
-                  tick={{ fill: MUTED, fontSize: 11 }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis
-                  allowDecimals={false}
-                  tick={{ fill: MUTED, fontSize: 12 }}
-                  axisLine={false}
-                  tickLine={false}
-                  width={36}
-                />
-                <Tooltip
-                  contentStyle={{
-                    borderRadius: 12,
-                    border: '1px solid #e2e8f0',
-                    fontSize: 13,
-                  }}
-                  labelFormatter={(_, payload) =>
-                    (payload?.[0]?.payload as { day?: string })?.day ?? ''
-                  }
-                />
-                <Line
-                  type="monotone"
-                  dataKey="searches"
-                  name="검색"
-                  stroke={TEAL}
-                  strokeWidth={2.5}
-                  dot={false}
-                  activeDot={{ r: 4 }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="results"
-                  name="결과"
-                  stroke={INK}
-                  strokeWidth={2}
-                  strokeDasharray="4 4"
-                  dot={false}
-                  activeDot={{ r: 4 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        )}
-        <p className="mt-2 text-[11px] text-ink-400">최근 14일 · 실선 검색 / 점선 결과</p>
-      </Panel>
     </div>
   );
 }

@@ -151,7 +151,7 @@ export function ResultDrawer({
       />
 
       <aside
-        className={`relative z-10 flex h-full w-full max-w-md flex-col border-l border-ink-100 bg-[#fbfaf7] shadow-2xl transition-transform duration-300 ease-out sm:max-w-lg ${
+        className={`relative z-10 flex h-full w-full max-w-md flex-col border-l border-ink-100 bg-[#fbfaf7] shadow-3 transition-transform duration-300 ease-out sm:max-w-lg ${
           visible ? 'translate-x-0' : 'translate-x-full'
         }`}
         style={{ maxHeight: '100dvh' }}

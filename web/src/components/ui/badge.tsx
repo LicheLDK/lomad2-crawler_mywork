@@ -28,11 +28,25 @@ const badgeVariants = cva(
 
 export interface BadgeProps
   extends React.HTMLAttributes<HTMLDivElement>,
-    VariantProps<typeof badgeVariants> {}
+    VariantProps<typeof badgeVariants> {
+  /** 좌측 6px status dot (currentColor). */
+  dot?: boolean;
+}
 
-function Badge({ className, variant, ...props }: BadgeProps) {
+function Badge({ className, variant, dot = false, children, ...props }: BadgeProps) {
   return (
-    <div className={cn(badgeVariants({ variant }), className)} {...props} />
+    <div
+      className={cn(badgeVariants({ variant }), dot && 'gap-1', className)}
+      {...props}
+    >
+      {dot ? (
+        <span
+          className="h-1.5 w-1.5 shrink-0 rounded-full bg-current"
+          aria-hidden
+        />
+      ) : null}
+      {children}
+    </div>
   );
 }
 

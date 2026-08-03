@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { ArrowUpRight } from 'lucide-react';
 import { useInvestigation } from '../useInvestigation';
 import type { InvestigationStatus } from '../types';
+import { Skeleton } from '../../../components/ui/skeleton';
 
 const SUMMARY_STATUSES: InvestigationStatus[] = [
   'Open',
@@ -54,7 +55,21 @@ export function InvestigationSummaryCard() {
           <p className="mb-3 text-xs text-rose-700">{error}</p>
         ) : null}
         {loading && cases.length === 0 ? (
-          <p className="text-sm text-ink-400">불러오는 중…</p>
+          <div
+            className="grid grid-cols-2 gap-3 sm:grid-cols-4"
+            aria-busy="true"
+            aria-label="Investigation 통계 불러오는 중"
+          >
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div
+                key={i}
+                className="rounded-xl border border-ink-100/70 bg-sand-50/80 px-3 py-3"
+              >
+                <Skeleton className="h-3 w-14" />
+                <Skeleton className="mt-2 h-7 w-12" />
+              </div>
+            ))}
+          </div>
         ) : (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             {SUMMARY_STATUSES.map((status) => (

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowUpRight, Activity, Cpu } from 'lucide-react';
 import { api } from '../api';
@@ -7,6 +7,12 @@ import type { InvestigationStatsResponse } from '../features/investigation';
 import { RecentSearches } from '../components/RecentSearches';
 import { DashboardSummary } from '../components/DashboardSummary';
 import { CaseSummaryCard } from '../features/investigation';
+import { Skeleton } from '../components/ui/skeleton';
+import {
+  MiniSparkline,
+  TrendDeltaBadge,
+  dayOverDayDelta,
+} from '../components/Sparkline';
 
 /**
  * Dashboard Overview — 요약만. 상세는 각 메뉴에서.
@@ -32,13 +38,11 @@ export function OverviewPage({
   const workerActive = queue?.active ?? 0;
   const workerFailed = queue?.failed ?? 0;
   const workerLabel =
-    queue == null
-      ? '확인 불가'
-      : workerFailed > 0
-        ? `주의 · failed ${workerFailed}`
-        : workerActive > 0
-          ? `처리 중 ${workerActive}`
-          : '대기 중';
+    workerFailed > 0
+      ? `주의 · failed ${workerFailed}`
+      : workerActive > 0
+        ? `처리 중 ${workerActive}`
+        : '대기 중';
 
   const [invStats, setInvStats] = useState<InvestigationStatsResponse | null>(
     null,
@@ -59,6 +63,15 @@ export function OverviewPage({
     };
   }, []);
 
+  const searchSeries = useMemo(
+    () => stats?.searchTrend?.map((r) => r.searches) ?? [],
+    [stats?.searchTrend],
+  );
+  const searchDelta = useMemo(
+    () => dayOverDayDelta(searchSeries),
+    [searchSeries],
+  );
+
   return (
     <div className="flex h-full min-h-0 flex-col gap-4 animate-fadeUp">
       <header className="shrink-0">
@@ -78,6 +91,8 @@ export function OverviewPage({
           value={stats?.last24h.searches ?? '—'}
           hint="최근 24시간"
           to="/search"
+          sparkline={searchSeries}
+          delta={searchDelta}
         />
         <OverviewTile
           label="오늘 Investigation"
@@ -91,12 +106,18 @@ export function OverviewPage({
           hint="AI Usage API · 오늘 호출 수"
           to="/analytics?section=ai"
         />
-        <div className="rounded-2xl border border-ink-100/80 bg-white/75 px-4 py-3 shadow-soft backdrop-blur">
+        <div className="rounded-2xl border border-ink-100/80 bg-white/75 px-4 py-3 shadow-1 backdrop-blur transition-[box-shadow,transform] duration-150 ease-out hover:-translate-y-0.5 hover:shadow-2">
           <div className="flex items-center gap-2 text-xs text-ink-500">
             <Cpu className="h-3.5 w-3.5" />
             Worker 상태
           </div>
-          <p className="mt-1 font-display text-xl text-ink-900">{workerLabel}</p>
+          {queue == null ? (
+            <div className="mt-1 space-y-2" aria-busy="true" aria-label="Worker 상태 확인 중">
+              <Skeleton className="h-6 w-28" />
+            </div>
+          ) : (
+            <p className="mt-1 font-display text-xl text-ink-900">{workerLabel}</p>
+          )}
           <Link
             to="/system?section=worker"
             className="mt-2 inline-flex items-center gap-1 text-xs text-teal-800 hover:underline"
@@ -121,7 +142,7 @@ export function OverviewPage({
         </div>
         <div className="min-h-0 space-y-5 overflow-y-auto overscroll-contain">
           <CaseSummaryCard />
-          <section className="rounded-2xl border border-ink-100/80 bg-white/75 px-5 py-4 shadow-soft backdrop-blur">
+          <section className="rounded-2xl border border-ink-100/80 bg-white/75 px-5 py-4 shadow-1 backdrop-blur transition-[box-shadow,transform] duration-150 ease-out hover:-translate-y-0.5 hover:shadow-2">
             <div className="flex items-center gap-2 text-xs uppercase tracking-[0.14em] text-ink-500">
               <Activity className="h-3.5 w-3.5" />
               Quick links
@@ -144,21 +165,31 @@ function OverviewTile({
   value,
   hint,
   to,
+  sparkline,
+  delta,
 }: {
   label: string;
   value: number | string;
   hint?: string;
   to: string;
+  sparkline?: number[];
+  delta?: ReturnType<typeof dayOverDayDelta>;
 }) {
   return (
     <Link
       to={to}
-      className="rounded-2xl border border-ink-100/80 bg-white/75 px-4 py-3 shadow-soft backdrop-blur transition hover:border-teal-600/30"
+      className="rounded-2xl border border-ink-100/80 bg-white/75 px-4 py-3 shadow-1 backdrop-blur transition-[box-shadow,transform,border-color] duration-150 ease-out hover:-translate-y-0.5 hover:border-teal-600/30 hover:shadow-2"
     >
-      <p className="text-xs text-ink-500">{label}</p>
-      <p className="mt-1 font-display text-2xl tabular-nums text-ink-900">
-        {value}
-      </p>
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-xs text-ink-500">{label}</p>
+        <MiniSparkline values={sparkline} />
+      </div>
+      <div className="mt-1 flex items-center gap-2">
+        <p className="font-display text-2xl tabular-nums text-ink-900">
+          {value}
+        </p>
+        <TrendDeltaBadge delta={delta ?? null} />
+      </div>
       {hint ? <p className="mt-0.5 text-[11px] text-ink-400">{hint}</p> : null}
     </Link>
   );

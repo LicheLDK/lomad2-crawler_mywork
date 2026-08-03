@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import {
   Navigate,
   Route,
@@ -23,7 +23,6 @@ import { AppShell } from './components/AppShell';
 import type { NavBadgeMap } from './components/AppSidebar';
 import { HistoryPage } from './pages/HistoryPage';
 import { RentalPage } from './pages/RentalPage';
-import { AnalyticsPage } from './pages/AnalyticsPage';
 import { SystemPage } from './pages/SystemPage';
 import { OverviewPage } from './pages/OverviewPage';
 import { PlaceholderPage } from './pages/PlaceholderPage';
@@ -35,6 +34,10 @@ import {
   subscribeSearchProgress,
   type CrawlProgressEvent,
 } from './lib/socket';
+
+const AnalyticsPage = lazy(() =>
+  import('./pages/AnalyticsPage').then((m) => ({ default: m.AnalyticsPage })),
+);
 
 const TERMINAL = new Set(['completed', 'partial', 'failed', 'cached']);
 const PROGRESS_DONE = new Set(['completed', 'partial', 'failed']);
@@ -473,7 +476,15 @@ export default function App() {
           path="/analytics"
           element={
             <div className="h-full overflow-y-auto overscroll-contain">
-              <AnalyticsPage stats={stats} />
+              <Suspense
+                fallback={
+                  <div className="rounded-2xl border border-ink-100/80 bg-white/60 px-6 py-16 text-center shadow-soft">
+                    <p className="text-sm text-ink-500">Analytics를 불러오는 중…</p>
+                  </div>
+                }
+              >
+                <AnalyticsPage stats={stats} />
+              </Suspense>
             </div>
           }
         />

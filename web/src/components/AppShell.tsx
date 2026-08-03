@@ -44,11 +44,11 @@ export function AppShell({
   return (
     <div className="h-dvh overflow-hidden bg-app-grid text-ink-900">
       <div className="mx-auto flex h-full max-w-[1600px]">
-        <aside className="hidden h-full w-56 shrink-0 flex-col overflow-y-auto border-r border-ink-100/70 bg-white/40 px-5 py-8 backdrop-blur lg:flex">
+        <aside className="hidden h-full w-56 shrink-0 flex-col overflow-y-auto border-r border-ink-100/70 bg-white/40 px-5 py-8 backdrop-blur dark:bg-sand-dark-800 dark:backdrop-blur-none lg:flex">
           <AppSidebar mode="expanded" {...sidebarProps} />
         </aside>
 
-        <aside className="hidden h-full w-[4.5rem] shrink-0 flex-col overflow-y-auto border-r border-ink-100/70 bg-white/40 px-2 py-8 backdrop-blur md:flex lg:hidden">
+        <aside className="hidden h-full w-[4.5rem] shrink-0 flex-col overflow-y-auto border-r border-ink-100/70 bg-white/40 px-2 py-8 backdrop-blur dark:bg-sand-dark-800 dark:backdrop-blur-none md:flex lg:hidden">
           <AppSidebar mode="collapsed" {...sidebarProps} />
         </aside>
 
@@ -60,7 +60,7 @@ export function AppShell({
               aria-label="메뉴 닫기"
               onClick={() => onMobileNavOpenChange(false)}
             />
-            <aside className="relative flex h-full w-56 max-w-[85vw] flex-col border-r border-ink-100/70 bg-[#fbfaf7] px-5 py-8 shadow-2xl">
+            <aside className="relative flex h-full w-56 max-w-[85vw] flex-col border-r border-ink-100/70 bg-[#fbfaf7] px-5 py-8 shadow-2xl dark:bg-sand-dark-800">
               <AppSidebar
                 mode="expanded"
                 {...sidebarProps}
@@ -77,7 +77,7 @@ export function AppShell({
               <div className="flex min-w-0 items-start gap-3">
                 <button
                   type="button"
-                  className="mt-1 rounded-lg border border-ink-100/80 bg-white/70 p-2 text-ink-700 transition hover:bg-sand-100 md:hidden"
+                  className="mt-1 rounded-lg border border-ink-100/80 bg-white/70 p-2 text-ink-700 transition hover:bg-sand-100 md:hidden dark:bg-sand-dark-800"
                   aria-label="메뉴 열기"
                   onClick={() => onMobileNavOpenChange(true)}
                 >

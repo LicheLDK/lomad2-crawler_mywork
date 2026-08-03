@@ -1,3 +1,5 @@
+import { Badge } from '../../../components/ui/badge';
+import { cn } from '../../../lib/utils';
 import type { InvestigationStatus } from '../types';
 
 const TONE: Record<InvestigationStatus, string> = {
@@ -14,11 +16,16 @@ export function InvestigationStatusBadge({
   status: InvestigationStatus;
 }) {
   return (
-    <span
-      className={`inline-flex rounded-md px-2 py-0.5 text-xs font-medium ring-1 ${TONE[status] ?? TONE.Open}`}
+    <Badge
+      dot
+      variant="outline"
+      className={cn(
+        'rounded-md border-transparent px-2 py-0.5 text-xs font-medium ring-1 hover:bg-transparent',
+        TONE[status] ?? TONE.Open,
+      )}
     >
       {status}
-    </span>
+    </Badge>
   );
 }
 

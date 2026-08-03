@@ -31,7 +31,6 @@ export function SearchToolbar({
   ]);
   const [maxResults, setMaxResults] = useState(10);
   const [forceCrawl, setForceCrawl] = useState(false);
-  const [showOptions, setShowOptions] = useState(false);
 
   useEffect(() => {
     if (keywordProp != null && keywordProp.trim()) {
@@ -59,22 +58,13 @@ export function SearchToolbar({
         });
       }}
     >
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <p className="text-xs uppercase tracking-[0.16em] text-ink-500">
-            Search
-          </p>
-          <h2 className="font-display text-xl text-ink-900 sm:text-2xl">
-            검색조건
-          </h2>
-        </div>
-        <button
-          type="button"
-          onClick={() => setShowOptions((v) => !v)}
-          className="text-xs text-ink-500 underline-offset-2 hover:text-ink-800 hover:underline"
-        >
-          {showOptions ? '옵션 숨기기' : '옵션'}
-        </button>
+      <div>
+        <p className="text-xs uppercase tracking-[0.16em] text-ink-500">
+          Search
+        </p>
+        <h2 className="font-display text-xl text-ink-900 sm:text-2xl">
+          검색조건
+        </h2>
       </div>
 
       <div className="mt-4 flex flex-col gap-3 lg:flex-row lg:items-end">
@@ -133,19 +123,17 @@ export function SearchToolbar({
             </label>
           );
         })}
-        {showOptions ? (
-          <label className="ml-auto inline-flex items-center gap-2 text-sm text-ink-700">
-            최대검색수
-            <input
-              type="number"
-              min={1}
-              max={50}
-              value={maxResults}
-              onChange={(e) => setMaxResults(Number(e.target.value) || 10)}
-              className="w-16 rounded-lg border border-ink-100 bg-sand-50 px-2 py-1 outline-none focus:border-teal-600"
-            />
-          </label>
-        ) : null}
+        <label className="ml-auto inline-flex items-center gap-2 text-sm text-ink-700">
+          최대검색수
+          <input
+            type="number"
+            min={1}
+            max={50}
+            value={maxResults}
+            onChange={(e) => setMaxResults(Number(e.target.value) || 10)}
+            className="w-16 rounded-lg border border-ink-100 bg-sand-50 px-2 py-1 outline-none focus:border-teal-600"
+          />
+        </label>
       </div>
     </form>
   );

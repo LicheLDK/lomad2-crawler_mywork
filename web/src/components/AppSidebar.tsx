@@ -1,6 +1,7 @@
 import { ChevronDown, Radar, X } from 'lucide-react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { Badge } from './ui/badge';
+import { ThemeToggle } from './ThemeToggle';
 import {
   NAV_SECTIONS,
   childPathActive,
@@ -13,13 +14,24 @@ import {
 export type NavBadgeMap = Partial<Record<NavId, number>>;
 
 function navClass(active: boolean, collapsed: boolean) {
-  return `flex w-full items-center gap-2 rounded-lg text-left transition ${
+  return `relative flex w-full items-center gap-2 rounded-lg text-left transition ${
     collapsed ? 'justify-center px-2 py-2.5' : 'px-3 py-2'
   } ${
     active
       ? 'bg-ink-900 text-sand-50'
       : 'text-ink-600 hover:bg-sand-100 hover:text-ink-900'
   }`;
+}
+
+/** Expanded 모드 active 좌측 teal 바. collapsed에서는 렌더하지 않음. */
+function NavActiveBar({ visible }: { visible: boolean }) {
+  if (!visible) return null;
+  return (
+    <span
+      className="absolute bottom-1.5 left-0 top-1.5 w-[2.5px] rounded-r-full bg-teal-500"
+      aria-hidden
+    />
+  );
 }
 
 function NavBadge({
@@ -109,6 +121,7 @@ function AccordionItem({
         aria-expanded={open}
         className={navClass(active, false)}
       >
+        <NavActiveBar visible={active} />
         <Icon className="h-4 w-4 shrink-0" />
         <span className="flex-1">{item.label}</span>
         <ChevronDown
@@ -191,6 +204,7 @@ function LinkItem({
     >
       {({ isActive }) => (
         <>
+          <NavActiveBar visible={isActive && !collapsed} />
           <Icon className="h-4 w-4 shrink-0" />
           {!collapsed ? (
             <span className="flex-1">{item.label}</span>
@@ -310,6 +324,7 @@ export function AppSidebar({
             <p>v{appVersion}</p>
             <p title="Worker">{workerCount}</p>
             <p title="Queue">{queueCount}</p>
+            <ThemeToggle collapsed />
           </div>
         ) : (
           <>
@@ -318,6 +333,7 @@ export function AppSidebar({
               <p>Worker {workerCount}</p>
               <p>Queue {queueCount}</p>
             </div>
+            <ThemeToggle />
             <p className="mt-4 text-[11px] leading-relaxed text-ink-400">
               중고나라 · 번개장터 · 당근
               <br />

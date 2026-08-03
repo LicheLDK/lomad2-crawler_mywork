@@ -442,7 +442,7 @@ export function RentalPage({
                               : '')}
                         </p>
                         <p
-                          className={`mt-1 text-[11px] ${
+                          className={`mt-1 text-[11px] tabular-nums ${
                             on ? 'text-sand-300' : 'text-ink-400'
                           }`}
                         >
