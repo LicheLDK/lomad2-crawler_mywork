@@ -24,6 +24,7 @@ export function OverviewPage({
   activeId,
   onSelectSearch,
   onDeleteSearch,
+  onDuplicateSearch,
   deletingId = null,
 }: {
   stats: StatsOverview | null;
@@ -32,6 +33,10 @@ export function OverviewPage({
   activeId?: string | null;
   onSelectSearch: (id: string) => void;
   onDeleteSearch?: (id: string) => void | Promise<void>;
+  onDuplicateSearch?: (item: {
+    keyword: string;
+    sites?: string[] | null;
+  }) => void | Promise<void>;
   deletingId?: string | null;
 }) {
   const queue = health?.info?.queue ?? stats?.queue ?? null;
@@ -137,6 +142,7 @@ export function OverviewPage({
             activeId={activeId}
             onSelectSearch={onSelectSearch}
             onDeleteSearch={onDeleteSearch}
+            onDuplicateSearch={onDuplicateSearch}
             deletingId={deletingId}
           />
         </div>

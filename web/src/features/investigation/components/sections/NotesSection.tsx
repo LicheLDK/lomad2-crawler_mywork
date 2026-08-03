@@ -8,6 +8,7 @@ import type {
   InvestigationNote,
 } from '../../types';
 import { Badge } from '../../../../components/ui/badge';
+import { ConfirmDialog } from '../../../../components/ui/confirm-dialog';
 import { toast } from '../../../../components/Toast';
 
 const AUTOSAVE_MS = 600;
@@ -117,6 +118,8 @@ function NoteCard({
 }) {
   const { updateNote, deleteNote } = useInvestigation();
   const [editing, setEditing] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   async function handleSave(body: string) {
     const trimmed = body.trim();
@@ -128,17 +131,22 @@ function NoteCard({
     try {
       await updateNote(caseId, note.id, trimmed);
     } catch (e) {
-      toast(formatApiError(e, '메모 수정에 실패했습니다.'));
+      toast(formatApiError(e, '메모 수정에 실패했습니다.'), { tone: 'error' });
       throw e;
     }
   }
 
   async function handleDelete() {
+    if (deleting) return;
+    setDeleting(true);
     try {
       await deleteNote(caseId, note.id);
+      setConfirmOpen(false);
       toast('메모를 삭제했습니다.');
     } catch (e) {
-      toast(formatApiError(e, '메모 삭제에 실패했습니다.'));
+      toast(formatApiError(e, '삭제에 실패했습니다.'), { tone: 'error' });
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -165,9 +173,7 @@ function NoteCard({
           </button>
           <button
             type="button"
-            onClick={() => {
-              void handleDelete();
-            }}
+            onClick={() => setConfirmOpen(true)}
             className="rounded-lg p-1.5 text-rose-600 transition hover:bg-rose-50"
             aria-label="메모 삭제"
           >
@@ -194,6 +200,22 @@ function NoteCard({
           )}
         </p>
       )}
+
+      <ConfirmDialog
+        open={confirmOpen}
+        title="메모 삭제"
+        description="이 메모를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다."
+        confirmText="삭제"
+        cancelText="취소"
+        variant="danger"
+        loading={deleting}
+        onCancel={() => {
+          if (!deleting) setConfirmOpen(false);
+        }}
+        onConfirm={() => {
+          void handleDelete();
+        }}
+      />
     </li>
   );
 }

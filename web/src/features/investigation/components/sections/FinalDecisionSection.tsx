@@ -38,7 +38,9 @@ export function InvestigationFinalDecisionPanel({
       toast(`최종 판정을 적용했습니다 · ${finalDecisionLabel(pending)}`);
       setPending(null);
     } catch (e) {
-      toast(formatApiError(e, '최종 판정 적용에 실패했습니다.'));
+      toast(formatApiError(e, '최종 판정 적용에 실패했습니다.'), {
+        tone: 'error',
+      });
     } finally {
       setBusy(false);
     }
@@ -102,13 +104,14 @@ export function InvestigationFinalDecisionPanel({
             ? `'${pendingOption.label}' — ${pendingOption.description} Case는 Completed로 변경됩니다.`
             : undefined
         }
-        confirmLabel={busy ? '적용 중…' : '판정 확정'}
-        cancelLabel="취소"
-        tone={
+        confirmText="판정 확정"
+        cancelText="취소"
+        loading={busy}
+        variant={
           pending === 'resale_confirmed'
             ? 'danger'
             : pending === 'excluded'
-              ? 'teal'
+              ? 'success'
               : 'default'
         }
         onCancel={() => {

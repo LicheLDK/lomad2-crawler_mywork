@@ -317,9 +317,26 @@ export default function App() {
       await refreshMeta();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+      throw e;
     } finally {
       setDeletingId(null);
     }
+  }
+
+  function onDuplicateSearch(item: {
+    keyword: string;
+    sites?: string[] | null;
+  }) {
+    const allowed: SiteCode[] = ['joonggonara', 'bungae', 'karrot'];
+    const fromItem = (item.sites ?? []).filter((s): s is SiteCode =>
+      (allowed as string[]).includes(s),
+    );
+    void onSubmit({
+      keyword: item.keyword,
+      sites: fromItem.length > 0 ? fromItem : allowed,
+      maxResultsPerSite: 10,
+      forceCrawl: false,
+    });
   }
 
   const queue = health?.info?.queue ?? stats?.queue ?? null;
@@ -388,6 +405,7 @@ export default function App() {
               activeId={detail?.searchId ?? activeSearchId}
               onSelectSearch={onSelectSearchFromHistory}
               onDeleteSearch={onDeleteSearch}
+              onDuplicateSearch={onDuplicateSearch}
               deletingId={deletingId}
             />
           }
@@ -412,6 +430,7 @@ export default function App() {
                     activeId={detail?.searchId ?? activeSearchId}
                     onSelectSearch={onSelectSearch}
                     onDeleteSearch={onDeleteSearch}
+                    onDuplicateSearch={onDuplicateSearch}
                     deletingId={deletingId}
                   />
                 </div>
@@ -423,6 +442,7 @@ export default function App() {
                       activeId={detail?.searchId ?? activeSearchId}
                       onSelectSearch={onSelectSearch}
                       onDeleteSearch={onDeleteSearch}
+                      onDuplicateSearch={onDuplicateSearch}
                       deletingId={deletingId}
                     />
                   </div>
@@ -459,6 +479,7 @@ export default function App() {
                 activeId={detail?.searchId ?? activeSearchId}
                 onSelectSearch={onSelectSearchFromHistory}
                 onDeleteSearch={onDeleteSearch}
+                onDuplicateSearch={onDuplicateSearch}
                 deletingId={deletingId}
               />
             </div>

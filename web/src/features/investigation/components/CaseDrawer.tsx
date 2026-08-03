@@ -1,17 +1,21 @@
 import { useEffect, useRef, useState } from 'react';
-import { ExternalLink, ImageOff, X } from 'lucide-react';
+import { ExternalLink, ImageOff, Trash2, X } from 'lucide-react';
 import { createPortal } from 'react-dom';
-import { resolveAssetUrl } from '../../../api';
+import { resolveAssetUrl, formatApiError } from '../../../api';
 import { formatPrice, formatTime, siteLabel, siteTone } from '../../../lib/format';
 import { Badge } from '../../../components/ui/badge';
 import { Button } from '../../../components/ui/button';
 import { Card, CardContent } from '../../../components/ui/card';
 import { Separator } from '../../../components/ui/separator';
+import { toast } from '../../../components/Toast';
 import type {
   InvestigationCase,
   InvestigationPriority,
 } from '../types';
+import { canTransitionStatus, isStatusChangeLocked } from '../lib/workflow';
+import { useInvestigation } from '../useInvestigation';
 import { StatusBadge } from './StatusBadge';
+import { InvestigationDeleteDialog } from './InvestigationDeleteDialog';
 import { InvestigationAiPanel } from './sections/AiAnalysisSection';
 import { InvestigationRecommendationPanel } from './sections/RecommendationSection';
 import { InvestigationSummaryPanel } from './sections/SummarySection';
@@ -68,11 +72,14 @@ export function CaseDrawer({
   row: InvestigationCase | null;
   onClose: () => void;
 }) {
+  const { changeStatus, closeCase } = useInvestigation();
   const open = Boolean(row);
   const [visible, setVisible] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [active, setActive] = useState<SectionId>('overview');
   const [lastRow, setLastRow] = useState<InvestigationCase | null>(null);
+  const [pendingDelete, setPendingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const onCloseRef = useRef(onClose);
   const refs = useRef<Record<SectionId, HTMLElement | null>>({
     overview: null,
@@ -88,6 +95,7 @@ export function CaseDrawer({
 
   useEffect(() => {
     if (row) setLastRow(row);
+    setPendingDelete(false);
   }, [row]);
 
   function handleClose(e?: React.SyntheticEvent) {
@@ -137,6 +145,24 @@ export function CaseDrawer({
   const r = displayRow;
   const imageSrc = resolveAssetUrl(r.imageUrl) || r.imageUrl || null;
   const priority = r.priority ?? 'Medium';
+  const canDelete =
+    !isStatusChangeLocked(r.status) &&
+    canTransitionStatus(r.status, 'Archived');
+
+  async function confirmDelete() {
+    if (!canDelete || deleting) return;
+    setDeleting(true);
+    try {
+      await changeStatus(r.id, 'Archived');
+      setPendingDelete(false);
+      toast('조사를 삭제했습니다.');
+      closeCase();
+    } catch (e) {
+      toast(formatApiError(e, '삭제에 실패했습니다.'), { tone: 'error' });
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   function jump(id: SectionId) {
     setActive(id);
@@ -181,15 +207,29 @@ export function CaseDrawer({
               {r.productName}
             </p>
           </div>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            onClick={handleClose}
-            aria-label="Drawer 닫기"
-          >
-            <X className="h-5 w-5" />
-          </Button>
+          <div className="flex shrink-0 items-center gap-1">
+            {canDelete ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => setPendingDelete(true)}
+                aria-label="조사 삭제"
+                className="text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            ) : null}
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={handleClose}
+              aria-label="Drawer 닫기"
+            >
+              <X className="h-5 w-5" />
+            </Button>
+          </div>
         </header>
 
         {/* Sticky section nav — AI / Evidence / Timeline 항상 접근 */}
@@ -395,6 +435,17 @@ export function CaseDrawer({
           </div>
         </footer>
       </aside>
+
+      <InvestigationDeleteDialog
+        open={pendingDelete}
+        loading={deleting}
+        onCancel={() => {
+          if (!deleting) setPendingDelete(false);
+        }}
+        onConfirm={() => {
+          void confirmDelete();
+        }}
+      />
     </div>,
     document.body,
   );

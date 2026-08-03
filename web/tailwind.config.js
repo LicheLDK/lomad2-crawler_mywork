@@ -89,12 +89,27 @@ export default {
           '0%': { backgroundPosition: '200% 0' },
           '100%': { backgroundPosition: '-200% 0' },
         },
+        dialogBackdrop: {
+          '0%': { opacity: '0' },
+          '100%': { opacity: '1' },
+        },
+        dialogPanel: {
+          '0%': { opacity: '0', transform: 'scale(0.96)' },
+          '100%': { opacity: '1', transform: 'scale(1)' },
+        },
+        toastIn: {
+          '0%': { opacity: '0', transform: 'translateY(12px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
       },
       animation: {
         fadeUp: 'fadeUp 0.45s ease-out both',
         fadeOutSoft: 'fadeOutSoft 0.4s ease-in both',
         pulseSoft: 'pulseSoft 1.6s ease-in-out infinite',
         shimmer: 'shimmer 1.6s ease-in-out infinite',
+        dialogBackdrop: 'dialogBackdrop 200ms ease-out both',
+        dialogPanel: 'dialogPanel 200ms ease-out both',
+        toastIn: 'toastIn 220ms ease-out both',
       },
     },
   },
