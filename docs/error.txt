@@ -1,13 +1,1 @@
-[api] [21:55:45.452] ERROR (37188): Cannot read properties of undefined (reading 'leave') {"context":"WsExceptionsHandler"}
-[api]     err: {
-[api]       "type": "TypeError",
-[api]       "message": "Cannot read properties of undefined (reading 'leave')",
-[api]       "stack":
-[api]           TypeError: Cannot read properties of undefined (reading 'leave')
-[api]               at CrawlProgressGateway.handleUnsubscribe (D:\Dongkale_Work\Liche_Work\Source\__Project_Lomad_MyWork\lomad2-crawler_mywork\src\progress\crawl-progress.gateway.ts:127:17)
-[api]               at D:\Dongkale_Work\Liche_Work\Source\__Project_Lomad_MyWork\lomad2-crawler_mywork\node_modules\@nestjs\websockets\context\ws-context-creator.js:43:33
-[api]               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
-[api]               at async CrawlProgressGateway.<anonymous> (D:\Dongkale_Work\Liche_Work\Source\__Project_Lomad_MyWork\lomad2-crawler_mywork\node_modules\@nestjs\websockets\context\ws-proxy.js:12:32)
-[api]               at async WebSocketsController.pickResult (D:\Dongkale_Work\Liche_Work\Source\__Project_Lomad_MyWork\lomad2-crawler_mywork\node_modules\@nestjs\websockets\web-sockets-controller.js:98:24)
-[api]     }
-[api] query: SELECT COUNT(1) AS "cnt" FROM "crawler_result" "CrawlerResult"
+OpenCV와 LooksSame 기반 비교를 먼저 구현
