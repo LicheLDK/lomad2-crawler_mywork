@@ -232,9 +232,6 @@ export function AnalyticsPage({ stats }: { stats: StatsOverview | null }) {
     );
   }
 
-  const highlight = (id: string) =>
-    section === id ? 'ring-2 ring-teal-600/40' : '';
-
   return (
     <div className="animate-fadeUp space-y-5">
       <div>
@@ -247,10 +244,7 @@ export function AnalyticsPage({ stats }: { stats: StatsOverview | null }) {
         </p>
       </div>
 
-      <div
-        id="section-search"
-        className={`scroll-mt-4 space-y-5 rounded-2xl ${highlight('search')}`}
-      >
+      <div id="section-search" className="scroll-mt-4 space-y-5">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <MetricCard label="검색 수" value={stats.totals.searches} />
           <MetricCard label="검색 결과" value={stats.totals.results} />
@@ -344,10 +338,7 @@ export function AnalyticsPage({ stats }: { stats: StatsOverview | null }) {
       </div>
 
       <div className="grid gap-5 lg:grid-cols-2">
-        <div
-          id="section-sites"
-          className={`scroll-mt-4 rounded-2xl ${highlight('sites')}`}
-        >
+        <div id="section-sites" className="scroll-mt-4">
           <Panel eyebrow="Sites" title="사이트별 통계">
             <p className="mb-3 text-sm text-ink-500">
               저장된 결과 · GET /stats → bySite
@@ -508,10 +499,7 @@ export function AnalyticsPage({ stats }: { stats: StatsOverview | null }) {
           </Panel>
         </div>
 
-        <div
-          id="section-ai"
-          className={`scroll-mt-4 rounded-2xl ${highlight('ai')}`}
-        >
+        <div id="section-ai" className="scroll-mt-4">
           <Panel eyebrow="AI · usage" title="AI 사용량 · 비용">
             <p className="mb-3 text-sm text-ink-500">
               GET /ai/usage/summary · by-provider
@@ -672,10 +660,7 @@ export function AnalyticsPage({ stats }: { stats: StatsOverview | null }) {
         </div>
       </div>
 
-      <div
-        id="section-investigation"
-        className={`scroll-mt-4 rounded-2xl ${highlight('investigation')}`}
-      >
+      <div id="section-investigation" className="scroll-mt-4">
         <Panel eyebrow="Investigation · byStatus" title="Investigation 상태 분포">
           <p className="mb-3 text-sm text-ink-500">
             Investigation Case 상태 · GET /investigations/stats → byStatus
